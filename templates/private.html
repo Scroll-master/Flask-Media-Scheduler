@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block title %}Личная страница{% endblock %}
+
+{% block content %}
+    <h1>Привет, {{ username }}! Это закрытая страница.</h1>
+    <form method="POST">
+        <label for="text">Введите текст:</label>
+        <input type="text" id="text" name="text" required>
+        <button type="submit">Сохранить</button>
+    </form>
+{% endblock %}

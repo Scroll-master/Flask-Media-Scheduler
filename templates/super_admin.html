@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block title %}Специальная страница{% endblock %}
+
+{% block content %}
+    <h1>Специальная страница</h1>
+    <form method="GET" action="/logout">
+        <button type="submit">Выйти из системы</button>
+    </form>
+{% endblock %}
