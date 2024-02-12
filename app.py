@@ -6,6 +6,7 @@ import pymysql
 import secrets, json, os
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+import threading
 
 app = Flask(__name__)
 
@@ -19,7 +20,6 @@ db = SQLAlchemy(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-
 
 
 class User(db.Model, UserMixin):
@@ -76,6 +76,21 @@ def add_media_from_folder(folder_path):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+class Schedule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255))
+    type = db.Column(db.String(50))  # Например, 'периодическое', 'исключение', 'специальная дата'
+    events = db.relationship('Event', backref='schedule', lazy=True)
+
+
+
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    schedule_id = db.Column(db.Integer, db.ForeignKey('schedule.id'), nullable=False)
+    media_id = db.Column(db.Integer, db.ForeignKey('media.id'), nullable=False)  # Связь с медиафайлом
+    start_time = db.Column(db.DateTime, nullable=False)  # Время начала события
+    end_time = db.Column(db.DateTime, nullable=False)  # Время окончания события
 
 
 @app.route('/')
@@ -187,13 +202,14 @@ if __name__ == '__main__':
             db.create_all()
             add_media_from_folder('C:/Users/PC/Desktop/Python_Hope/static/videos')
         print("Успешное подключение к базе данных и создание таблиц!")
+        
+        # Запуск сервера Flask
+        print("Запуск сервера Flask...")
+        app.run(debug=True, threaded=True, host='0.0.0.0')
+        
     except Exception as e:
         # Обработка ошибки при подключении
-        print(f"Ошибка подключения к базе данных: {str(e)}")
-    finally:
-        print("Запуск сервера Flask...")
-           
+        print(f"Ошибка при запуске сервера Flask: {str(e)}")
 
-    app.run(debug=True)
 
 print("После if __name__ == '__main__':")
