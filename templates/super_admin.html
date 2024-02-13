@@ -11,6 +11,8 @@
         <tr>
             <th>Название</th>
             <th>Описание</th>
+            <th>Тип</th>
+            <th>Дата (для специальной даты)</th>
             <th>Действия</th>
         </tr>
     </thead>
@@ -19,6 +21,8 @@
         <tr>
             <td>{{ schedule.name }}</td>
             <td>{{ schedule.description }}</td>
+            <td>{{ schedule.type }}</td>
+            <td>{{ schedule.date if schedule.type == 'специальная дата' else 'N/A' }}</td>
             <td>
                 {% if schedule.id %}
                 <form action="{{ url_for('edit_schedule', schedule_id=schedule.id) }}" method="post">

@@ -13,12 +13,27 @@
     </div>
     <div>
         <label for="type">Тип расписания:</label>
-        <select id="type" name="type">
-            <option value="периодическое" {{ "selected" if schedule and schedule.type == "периодическое" }}>Периодическое</option>
+        <select id="scheduleType" name="type">
+            <option value="повседневное" {{ "selected" if schedule and schedule.type == "повседневное" }}>Повседневное</option>
             <option value="исключение" {{ "selected" if schedule and schedule.type == "исключение" }}>Исключение</option>
             <option value="специальная дата" {{ "selected" if schedule and schedule.type == "специальная дата" }}>Специальная дата</option>
         </select>
     </div>
+    <div id="dateField" style="display:none;">
+        <label for="date">Дата:</label>
+        <input type="date" id="date" name="date">
+    </div>
     <button type="submit">Сохранить</button>
 </form>
+
+<script>
+document.getElementById("scheduleType").addEventListener("change", function() {
+  var value = this.value;
+  if(value == "специальная дата") {
+    document.getElementById("dateField").style.display = "block";
+  } else {
+    document.getElementById("dateField").style.display = "none";
+  }
+});
+</script>
 {% endblock %}

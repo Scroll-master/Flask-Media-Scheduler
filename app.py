@@ -81,6 +81,7 @@ class Schedule(db.Model):
     name = db.Column(db.String(100))
     description = db.Column(db.String(255))
     type = db.Column(db.String(50))  # Например, 'периодическое', 'исключение', 'специальная дата'
+    date = db.Column(db.Date, nullable=True)  # Добавлено для хранения даты специального расписания
     events = db.relationship('Event', backref='schedule', lazy=True)
 
 
@@ -200,15 +201,25 @@ def new_schedule():
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
-        type = request.form.get('type')
+        schedule_type = request.form.get('type')
+        date = request.form.get('date') if schedule_type == 'специальная дата' else None
+        
         # Создание нового объекта Schedule
-        new_schedule = Schedule(name=name, description=description, type=type)
+        new_schedule = Schedule(name=name, description=description, type=schedule_type)
+        
+        if date:
+            try:
+                new_schedule.date = datetime.strptime(date, '%Y-%m-%d').date()
+            except ValueError:
+                flash('Неверный формат даты. Пожалуйста, используйте формат ГГГГ-ММ-ДД.')
+                return render_template('edit_schedule.html', schedule=None)
+            
         db.session.add(new_schedule)
         db.session.commit()
         flash('Новое расписание создано.')
         return redirect(url_for('super_admin_page'))
     # Передаем None для schedule, чтобы шаблон знал, что это создание, а не редактирование
-    return render_template('edit_schedule.html', schedule=schedule)
+    return render_template('edit_schedule.html', schedule=None)
 
 #Маршрут для редактирования существующего расписания:
 @app.route('/schedule/edit/<int:schedule_id>', methods=['GET', 'POST'])
