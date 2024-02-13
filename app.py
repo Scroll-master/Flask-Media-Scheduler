@@ -78,7 +78,7 @@ def load_user(user_id):
 
 class Schedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100))
     description = db.Column(db.String(255))
     type = db.Column(db.String(50))  # Например, 'периодическое', 'исключение', 'специальная дата'
     events = db.relationship('Event', backref='schedule', lazy=True)
@@ -185,11 +185,62 @@ def admin_page():
 def super_admin_page():
     if current_user.role != 'master':
         return "Доступ запрещен", 403  # Или перенаправление на другую страницу
+    schedules = Schedule.query.all()  # Загружаем все расписания из базы данных
     # Логика страницы Super_Admin
-    return render_template('super_admin.html')
+    return render_template('super_admin.html', schedules=schedules)
 
 
+#Маршрут для создания нового расписания:
+@app.route('/schedule/new', methods=['GET', 'POST'])
+@login_required
+def new_schedule():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    schedule = None  # Нет расписания при создании нового
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        type = request.form.get('type')
+        # Создание нового объекта Schedule
+        new_schedule = Schedule(name=name, description=description, type=type)
+        db.session.add(new_schedule)
+        db.session.commit()
+        flash('Новое расписание создано.')
+        return redirect(url_for('super_admin_page'))
+    # Передаем None для schedule, чтобы шаблон знал, что это создание, а не редактирование
+    return render_template('edit_schedule.html', schedule=schedule)
 
+#Маршрут для редактирования существующего расписания:
+@app.route('/schedule/edit/<int:schedule_id>', methods=['GET', 'POST'])
+@login_required
+def edit_schedule(schedule_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    schedule = Schedule.query.get_or_404(schedule_id)
+    # Логика редактирования расписания
+    if request.method == 'POST':
+        schedule.name = request.form.get('name')
+        schedule.description = request.form.get('description')
+        schedule.type = request.form.get('type')
+        
+         
+        
+        db.session.commit()
+        flash('Расписание успешно обновлено.')
+        return redirect(url_for('super_admin_page'))
+    
+    return render_template('edit_schedule.html', schedule=schedule)
+
+#Маршрут для удаления расписания:
+@app.route('/schedule/delete/<int:schedule_id>', methods=['POST'])
+@login_required
+def delete_schedule(schedule_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    schedule = Schedule.query.get_or_404(schedule_id)
+    db.session.delete(schedule)
+    db.session.commit()
+    return redirect(url_for('super_admin_page'))
 
 print("Перед if __name__ == '__main__':")
 
