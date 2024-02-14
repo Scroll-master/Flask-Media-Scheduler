@@ -81,7 +81,7 @@ class Schedule(db.Model):
     name = db.Column(db.String(100))
     description = db.Column(db.String(255))
     type = db.Column(db.String(50))  # Например, 'периодическое', 'исключение', 'специальная дата'
-    date = db.Column(db.Date, nullable=True)  # Добавлено для хранения даты специального расписания
+    datetime = db.Column(db.DateTime, nullable=True)  # Обновлено для хранения даты и времени специального расписания
     events = db.relationship('Event', backref='schedule', lazy=True)
 
 
@@ -202,14 +202,14 @@ def new_schedule():
         name = request.form.get('name')
         description = request.form.get('description')
         schedule_type = request.form.get('type')
-        date = request.form.get('date') if schedule_type == 'специальная дата' else None
+        datetime_str = request.form.get('datetime') if schedule_type == 'специальная дата' else None
         
         # Создание нового объекта Schedule
         new_schedule = Schedule(name=name, description=description, type=schedule_type)
         
-        if date:
+        if datetime_str:
             try:
-                new_schedule.date = datetime.strptime(date, '%Y-%m-%d').date()
+                new_schedule.datetime = datetime.strptime(datetime_str, '%Y-%m-%dT%H:%M')
             except ValueError:
                 flash('Неверный формат даты. Пожалуйста, используйте формат ГГГГ-ММ-ДД.')
                 return render_template('edit_schedule.html', schedule=None)
@@ -233,7 +233,8 @@ def edit_schedule(schedule_id):
         schedule.name = request.form.get('name')
         schedule.description = request.form.get('description')
         schedule.type = request.form.get('type')
-        
+        if schedule.type == 'специальная дата':
+            schedule.datetime = datetime.strptime(request.form.get('datetime'), '%Y-%m-%dT%H:%M')
          
         
         db.session.commit()

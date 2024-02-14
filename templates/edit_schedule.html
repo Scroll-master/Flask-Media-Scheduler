@@ -19,10 +19,12 @@
             <option value="специальная дата" {{ "selected" if schedule and schedule.type == "специальная дата" }}>Специальная дата</option>
         </select>
     </div>
-    <div id="dateField" style="display:none;">
-        <label for="date">Дата:</label>
-        <input type="date" id="date" name="date">
+
+    <div id="dateTimeField" style="display:none;">
+      <label for="datetime">Дата и время:</label>
+      <input type="datetime-local" id="datetime" name="datetime" step="60">
     </div>
+    
     <button type="submit">Сохранить</button>
 </form>
 
@@ -30,9 +32,9 @@
 document.getElementById("scheduleType").addEventListener("change", function() {
   var value = this.value;
   if(value == "специальная дата") {
-    document.getElementById("dateField").style.display = "block";
+    document.getElementById("dateTimeField").style.display = "block";
   } else {
-    document.getElementById("dateField").style.display = "none";
+    document.getElementById("dateTimeField").style.display = "none";
   }
 });
 </script>

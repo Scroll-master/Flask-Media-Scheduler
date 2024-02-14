@@ -22,10 +22,18 @@
             <td>{{ schedule.name }}</td>
             <td>{{ schedule.description }}</td>
             <td>{{ schedule.type }}</td>
-            <td>{{ schedule.date if schedule.type == 'специальная дата' else 'N/A' }}</td>
             <td>
+                {% if schedule.type == 'специальная дата' and schedule.datetime %}
+                    {{ schedule.datetime.strftime('%Y-%m-%d %H:%M') }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+
+            <td>
+
                 {% if schedule.id %}
-                <form action="{{ url_for('edit_schedule', schedule_id=schedule.id) }}" method="post">
+                <form action="{{ url_for('edit_schedule', schedule_id=schedule.id) }}" method="get">
                     <button type="submit">Редактировать</button>
                 </form>
                 <form action="{{ url_for('delete_schedule', schedule_id=schedule.id) }}" method="post">
