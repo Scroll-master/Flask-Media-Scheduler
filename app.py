@@ -187,8 +187,9 @@ def super_admin_page():
     if current_user.role != 'master':
         return "Доступ запрещен", 403  # Или перенаправление на другую страницу
     schedules = Schedule.query.all()  # Загружаем все расписания из базы данных
+    events = Event.query.all()  # Загружаем все события из базы данных
     # Логика страницы Super_Admin
-    return render_template('super_admin.html', schedules=schedules)
+    return render_template('super_admin.html', schedules=schedules, events=events)
 
 
 #Маршрут для создания нового расписания:
@@ -277,6 +278,73 @@ def delete_schedule(schedule_id):
     db.session.delete(schedule)
     db.session.commit()
     return redirect(url_for('super_admin_page'))
+
+
+@app.route('/event/new', methods=['GET', 'POST'])
+@login_required
+def new_event():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    event = None
+    if request.method == 'POST':
+        # Здесь будет логика обработки данных формы для создания нового события
+        schedule_id = request.form.get('schedule_id')
+        media_id = request.form.get('media_id')
+        start_time = request.form.get('start_time')
+        end_time = request.form.get('end_time')
+        
+        # Проверка на корректность введенных данных, создание и сохранение нового события
+        # Пример:
+        new_event = Event(schedule_id=schedule_id, media_id=media_id, 
+                          start_time=datetime.strptime(start_time, '%Y-%m-%dT%H:%M'),
+                          end_time=datetime.strptime(end_time, '%Y-%m-%dT%H:%M'))
+        db.session.add(new_event)
+        db.session.commit()
+        flash('Новое событие успешно создано.')
+        return redirect(url_for('super_admin_page'))
+    else:
+        schedules = Schedule.query.all()
+        media_files = Media.query.all()
+        return render_template('edit_event.html', event=None, schedules=schedules, media_files=media_files)
+
+
+@app.route('/event/edit/<int:event_id>', methods=['GET', 'POST'])
+@login_required
+def edit_event(event_id):
+    event = Event.query.get_or_404(event_id)
+    if request.method == 'POST':
+        event.schedule_id = request.form.get('schedule_id')
+        event.media_id = request.form.get('media_id')
+        event.start_time = datetime.strptime(request.form.get('start_time'), '%Y-%m-%dT%H:%M')
+        event.end_time = datetime.strptime(request.form.get('end_time'), '%Y-%m-%dT%H:%M')
+        
+        db.session.commit()
+        flash('Событие успешно обновлено.')
+        return redirect(url_for('super_admin_page'))
+    else:
+        schedules = Schedule.query.all()
+        media_files = Media.query.all()
+        return render_template('edit_event.html', event=event, schedules=schedules, media_files=media_files)
+
+
+@app.route('/event/delete/<int:event_id>', methods=['POST'])
+@login_required
+def delete_event(event_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    event = Event.query.get_or_404(event_id)
+    db.session.delete(event)
+    db.session.commit()
+    flash('Событие успешно удалено.')
+    return redirect(url_for('super_admin_page'))
+
+
+
+
+
+
+
+
 
 print("Перед if __name__ == '__main__':")
 

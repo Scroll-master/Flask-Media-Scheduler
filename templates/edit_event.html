@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% for message in get_flashed_messages() %}
+<div class="alert alert-warning" role="alert">
+    {{ message }}
+</div>
+{% endfor %}
+
+<h2>{{ "Редактировать" if event is defined and event.id else "Создать новое" }} событие</h2>
+
+<form method="post">
+    <div>
+        <label for="schedule">Расписание:</label>
+        <select id="schedule" name="schedule_id">
+            {% for schedule in schedules %}
+            <option value="{{ schedule.id }}">{{ schedule.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="media">Медиафайл:</label>
+        <select id="media" name="media_id">
+            {% for media in media_files %}
+            <option value="{{ media.id }}">{{ media.title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="start_time">Время начала:</label>
+        <input type="datetime-local" id="start_time" name="start_time" required>
+    </div>
+    <div>
+        <label for="end_time">Время окончания:</label>
+        <input type="datetime-local" id="end_time" name="end_time" required>
+    </div>
+    <button type="submit">{{ "Обновить" if event.id else "Создать" }}</button>
+</form>
+{% endblock %}
