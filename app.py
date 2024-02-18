@@ -200,6 +200,13 @@ def new_schedule():
     schedule = None  # Нет расписания при создании нового
     if request.method == 'POST':
         name = request.form.get('name')
+        
+        
+        existing_schedule = Schedule.query.filter_by(name=name).first()
+        if existing_schedule:
+            flash('Расписание с таким названием уже существует.')
+            return render_template('edit_schedule.html', schedule=None)
+        
         description = request.form.get('description')
         schedule_type = request.form.get('type')
         datetime_str = request.form.get('datetime') if schedule_type == 'специальная дата' else None
@@ -207,12 +214,19 @@ def new_schedule():
         # Создание нового объекта Schedule
         new_schedule = Schedule(name=name, description=description, type=schedule_type)
         
-        if datetime_str:
+        if schedule_type == 'специальная дата':
+            datetime_str = request.form.get('datetime')
+            if not datetime_str:
+                flash('Укажите дату и время для специальной даты.')
+                return render_template('edit_schedule.html', schedule=None)
             try:
                 new_schedule.datetime = datetime.strptime(datetime_str, '%Y-%m-%dT%H:%M')
             except ValueError:
-                flash('Неверный формат даты. Пожалуйста, используйте формат ГГГГ-ММ-ДД.')
+                flash('Неверный формат даты и времени. Используйте формат ГГГГ-ММ-ДД ЧЧ:ММ.')
                 return render_template('edit_schedule.html', schedule=None)
+            
+        else:
+            schedule.datetime = None  # Обнуляем дату и время для не-специальных дат    
             
         db.session.add(new_schedule)
         db.session.commit()
@@ -230,12 +244,22 @@ def edit_schedule(schedule_id):
     schedule = Schedule.query.get_or_404(schedule_id)
     # Логика редактирования расписания
     if request.method == 'POST':
-        schedule.name = request.form.get('name')
+        name = request.form.get('name')  # Извлекаем имя из формы
+        
+        # Проверяем, существует ли другое расписание с таким же именем
+        existing_schedule = Schedule.query.filter(Schedule.id != schedule_id, Schedule.name == name).first()
+        if existing_schedule:
+            flash('Расписание с таким названием уже существует.')
+            return render_template('edit_schedule.html', schedule=schedule)
+        
         schedule.description = request.form.get('description')
         schedule.type = request.form.get('type')
+        
         if schedule.type == 'специальная дата':
+            datetime_str = request.form.get('datetime')
             schedule.datetime = datetime.strptime(request.form.get('datetime'), '%Y-%m-%dT%H:%M')
-         
+        else:
+            schedule.datetime = None  # Обнуляем дату и время для не-специальных дат
         
         db.session.commit()
         flash('Расписание успешно обновлено.')

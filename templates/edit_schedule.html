@@ -1,6 +1,13 @@
 {% extends 'base.html' %}
 
 {% block content %}
+
+{% for message in get_flashed_messages() %}
+<div class="alert alert-warning" role="alert">
+    {{ message }}
+</div>
+{% endfor %}
+
 <h2>{{ "Редактировать" if schedule.id else "Создать новое" }} расписание</h2>
 <form method="post">
     <div>
@@ -22,20 +29,24 @@
 
     <div id="dateTimeField" style="display:none;">
       <label for="datetime">Дата и время:</label>
-      <input type="datetime-local" id="datetime" name="datetime" step="60">
+      <input type="datetime-local" id="datetime" name="datetime" step="60" required>
     </div>
     
     <button type="submit">Сохранить</button>
 </form>
 
 <script>
-document.getElementById("scheduleType").addEventListener("change", function() {
-  var value = this.value;
-  if(value == "специальная дата") {
-    document.getElementById("dateTimeField").style.display = "block";
-  } else {
-    document.getElementById("dateTimeField").style.display = "none";
-  }
-});
+  document.getElementById("scheduleType").addEventListener("change", function() {
+    var value = this.value;
+    var dateTimeField = document.getElementById("dateTimeField");
+    var datetimeInput = document.getElementById("datetime");
+    if(value == "специальная дата") {
+      dateTimeField.style.display = "block";
+      datetimeInput.required = true; // Делаем поле обязательным для заполнения
+    } else {
+      dateTimeField.style.display = "none";
+      datetimeInput.required = false; // Убираем обязательность поля
+    }
+  });
 </script>
 {% endblock %}
