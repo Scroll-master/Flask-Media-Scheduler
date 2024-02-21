@@ -36,4 +36,8 @@
     </div>
     <button type="submit">{{ "Обновить" if event.id else "Создать" }}</button>
 </form>
+<form action="{{ url_for('super_admin_page') }}" method="get">
+    <button type="submit" class="btn btn-secondary">Назад</button>
+</form>
+
 {% endblock %}

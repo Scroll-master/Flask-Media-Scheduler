@@ -3,6 +3,12 @@
 {% block title %}Специальная страница{% endblock %}
 
 {% block content %}
+{% for message in get_flashed_messages(category_filter=["error"]) %}
+<div class="alert alert-warning" role="alert">
+    {{ message }}
+</div>
+{% endfor %}
+
     <h1>Специальная страница</h1>
 
     <h2>Расписания</h2>
@@ -19,10 +25,10 @@
     <tbody>
         {% for schedule in schedules %}
         <tr>
-            <td>{{ schedule.name }}</td>
+            <td>{{ schedule.name }} {% if schedule.events %}<span style="color: red;">(Используется в событиях)</span>{% endif %}</td>
             <td>{{ schedule.description }}</td>
             <td>{{ schedule.type }}</td>
-            <td>
+            <td>ы
                 {% if schedule.type == 'специальная дата' and schedule.datetime %}
                     {{ schedule.datetime.strftime('%Y-%m-%d %H:%M') }}
                 {% else %}
@@ -47,6 +53,39 @@
         {% endfor %}
     </tbody>
 </table>
+
+<h2>События</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Расписание</th>
+            <th>Медиафайл</th>
+            <th>Время начала</th>
+            <th>Время окончания</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for event in events %}
+        <tr>
+            <td>{{ event.schedule.name }}</td>
+            <td>{{ event.media.title }}</td>
+            <td>{{ event.start_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ event.end_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>
+                <form action="{{ url_for('edit_event', event_id=event.id) }}" method="get">
+                    <button type="submit">Редактировать</button>
+                </form>
+                <form action="{{ url_for('delete_event', event_id=event.id) }}" method="post">
+                    <button type="submit">Удалить</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
 <form action="{{ url_for('new_schedule') }}" method="get">
     <button type="submit">Добавить новое расписание</button>
 </form>

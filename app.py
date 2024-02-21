@@ -48,27 +48,40 @@ class Media(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     duration = db.Column(db.String(8))  # Длительность в формате ЧЧ:ММ:СС
     tags = db.Column(db.String(255), nullable=True)  # Теги, которые могут изначально отсутствовать
+    status = db.Column(db.String(50), default='Активен')  # Добавленное поле статуса
     
 
 def add_media_from_folder(folder_path):
-    existing_titles = {media.title for media in Media.query.all()}  # Собираем названия уже добавленных записей
-    for filename in os.listdir(folder_path):
-        if filename.endswith((".mp4", ".avi")) and filename not in existing_titles:
+    existing_media = {media.filename: media for media in Media.query.all()}
+    actual_filenames = set(os.listdir(folder_path))
+
+    # Обновление статуса для отсутствующих файлов
+    for filename, media in existing_media.items():
+        if filename not in actual_filenames:
+            media.status = 'Отсутствует'
+            db.session.add(media)
+
+    # Добавление новых медиафайлов в БД
+    for filename in actual_filenames:
+        if filename.endswith((".mp4", ".avi")) and filename not in existing_media:
             filepath = os.path.join(folder_path, filename)
             clip = VideoFileClip(filepath)
             duration_seconds = int(clip.duration)
             duration_formatted = f"{duration_seconds // 3600:02d}:{(duration_seconds % 3600 // 60):02d}:{duration_seconds % 60:02d}"
 
-            media = Media(
-                title=filename,
+            new_media = Media(
+                title=filename,  # Используйте filename в качестве title
                 filename=filename,
                 filepath=filepath,
                 created_at=datetime.now(),
                 duration=duration_formatted,
-                tags=None  # Изначально теги отсутствуют
+                tags=None,  # Изначально теги отсутствуют
+                status='Активен'  # Помечаем новый файл как активный
             )
-            db.session.add(media)
+            db.session.add(new_media)
+
     db.session.commit()
+
 
 
 
@@ -92,7 +105,7 @@ class Event(db.Model):
     media_id = db.Column(db.Integer, db.ForeignKey('media.id'), nullable=False)  # Связь с медиафайлом
     start_time = db.Column(db.DateTime, nullable=False)  # Время начала события
     end_time = db.Column(db.DateTime, nullable=False)  # Время окончания события
-
+    media = db.relationship('Media', backref='events')
 
 @app.route('/')
 def hello_world():
@@ -243,6 +256,9 @@ def edit_schedule(schedule_id):
     if current_user.role != 'master':
         return "Доступ запрещен", 403
     schedule = Schedule.query.get_or_404(schedule_id)
+    if schedule.events:  # Проверяем, связано ли расписание с какими-либо событиями
+        flash('Расписание уже используется в событиях и не может быть отредактировано.', 'error')
+        return redirect(url_for('super_admin_page'))
     # Логика редактирования расписания
     if request.method == 'POST':
         name = request.form.get('name')  # Извлекаем имя из формы
@@ -275,6 +291,9 @@ def delete_schedule(schedule_id):
     if current_user.role != 'master':
         return "Доступ запрещен", 403
     schedule = Schedule.query.get_or_404(schedule_id)
+    if schedule.events:  # Проверка на наличие связанных событий
+        flash('Расписание используется в одном или нескольких событиях и не может быть удалено. Пожалуйста, удалите связанные события перед удалением расписания.', 'error')
+        return redirect(url_for('super_admin_page'))
     db.session.delete(schedule)
     db.session.commit()
     return redirect(url_for('super_admin_page'))
@@ -292,6 +311,17 @@ def new_event():
         media_id = request.form.get('media_id')
         start_time = request.form.get('start_time')
         end_time = request.form.get('end_time')
+        
+        # Проверка на перекрытие времени с другими событиями
+        overlapping_events = Event.query.filter(
+            Event.end_time > start_time,
+            Event.start_time < end_time
+        ).all()
+
+        if overlapping_events:
+            flash('Выбранное время перекрывается с другими событиями. Пожалуйста, выберите другое время.')
+            return redirect(url_for('new_event'))
+        # Если нет перекрытия, создаем новое событие
         
         # Проверка на корректность введенных данных, создание и сохранение нового события
         # Пример:
@@ -311,6 +341,8 @@ def new_event():
 @app.route('/event/edit/<int:event_id>', methods=['GET', 'POST'])
 @login_required
 def edit_event(event_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
     event = Event.query.get_or_404(event_id)
     if request.method == 'POST':
         event.schedule_id = request.form.get('schedule_id')
