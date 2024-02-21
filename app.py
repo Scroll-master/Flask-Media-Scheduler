@@ -6,16 +6,24 @@ import pymysql
 import secrets, json, os
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename  # Добавлен для безопасной загрузки файлов
 import threading
+
 
 app = Flask(__name__)
 
 app.secret_key = secrets.token_hex(16)
 
+# Создайте объект UploadSet для медиафайлов
+
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:20120512LiBuN@localhost/Users'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = 'C:/Users/PC/Desktop/Python_Hope/static/videos'
+
 
 db = SQLAlchemy(app)
+
 
 
 login_manager = LoginManager()
@@ -201,8 +209,9 @@ def super_admin_page():
         return "Доступ запрещен", 403  # Или перенаправление на другую страницу
     schedules = Schedule.query.all()  # Загружаем все расписания из базы данных
     events = Event.query.all()  # Загружаем все события из базы данных
+    media_files = Media.query.all()  # Добавьте эту строку для получения медиафайлов
     # Логика страницы Super_Admin
-    return render_template('super_admin.html', schedules=schedules, events=events)
+    return render_template('super_admin.html', schedules=schedules, events=events, media_files=media_files)
 
 
 #Маршрут для создания нового расписания:
@@ -240,7 +249,7 @@ def new_schedule():
                 return render_template('edit_schedule.html', schedule=None)
             
         else:
-            schedule.datetime = None  # Обнуляем дату и время для не-специальных дат    
+            new_schedule.datetime = None  # Обнуляем дату и время для не-специальных дат    
             
         db.session.add(new_schedule)
         db.session.commit()
@@ -371,8 +380,92 @@ def delete_event(event_id):
     return redirect(url_for('super_admin_page'))
 
 
+@app.route('/media/new', methods=['GET', 'POST'])
+@login_required
+def new_media():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    if request.method == 'POST':
+        if 'media' in request.files:
+            file = request.files['media']
+            if file.filename != '' and file.filename.endswith(('.mp4', '.avi')):
+                tags = request.form.get('tags')  # Получение тегов из формы
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                # Определение длительности видео
+                try:
+                    clip = VideoFileClip(filepath)
+                    duration = str(datetime.timedelta(seconds=int(clip.duration)))
+                except Exception as e:
+                    flash(f'Ошибка при определении длительности файла: {e}')
+                    duration = None  # В случае ошибки установить длительность как None
+                # Проверка существования файла в БД
+                existing_media = Media.query.filter_by(filename=filename).first()
+                if existing_media:
+                    flash('Файл уже существует в базе данных.')
+                    return redirect(url_for('new_media'))
+                # Создание нового медиа объекта
+                new_media = Media(title=filename, filename=filename, filepath=filepath, duration=duration, tags=tags, status='Активен')
+                db.session.add(new_media)
+                db.session.commit()
+                flash('Файл успешно загружен: {}'.format(filename))
+                return redirect(url_for('media_player'))
+            else:
+                flash('Неподдерживаемый формат файла.')
+        else:
+            flash('Файл не выбран.')
+    return render_template('edit_media.html', action='new')
 
 
+@app.route('/media/edit/<int:media_id>', methods=['GET', 'POST'])
+@login_required
+def edit_media(media_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    media = Media.query.get_or_404(media_id)
+    if request.method == 'POST':
+        # Получаем новые теги из формы
+        media.tags = request.form.get('tags')
+        # Сохраняем обновленные данные в базе данных
+        db.session.commit()
+        flash('Информация о медиафайле обновлена.')
+        return redirect(url_for('media_player', media_id=media_id))
+    else:
+        # Отображение формы для редактирования медиафайла
+        return render_template('edit_media.html', media=media)
+
+
+@app.route('/media/delete/<int:media_id>', methods=['POST'])
+@login_required
+def delete_media(media_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    media = Media.query.get_or_404(media_id)
+    # Проверяем, связан ли медиафайл с какими-либо событиями
+    if media.events:
+        # Если медиафайл используется, предотвращаем его удаление
+        flash('Этот медиафайл используется в одном или нескольких событиях и не может быть удалён.', 'error')
+        return redirect(url_for('media_player'))
+    else:
+        # Если медиафайл не используется, удаляем его из базы данных и файловой системы
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], media.filename))
+        except OSError as e:
+            flash(f'Ошибка при удалении файла: {e}', 'error')
+        db.session.delete(media)
+        db.session.commit()
+        flash('Медиафайл успешно удалён.', 'success')
+        return redirect(url_for('media_player'))
+
+
+@app.route('/media_player')
+@login_required
+def media_player():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    media_files = Media.query.all()  # Получаем список всех медиафайлов из базы данных
+    return render_template('media_player.html', media_files=media_files)
 
 
 

@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    {% for message in get_flashed_messages() %}
+    <div class="alert alert-warning" role="alert">
+        {{ message }}
+    </div>
+    {% endfor %}
+
+    <h2>{{ "Редактировать медиафайл" if media is defined and media.id else "Добавить новый медиафайл" }}</h2>
+
+    <form action="{{ url_for('edit_media', media_id=media.id) if media is defined and media.id else url_for('new_media') }}" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="tags">Теги:</label>
+            <input type="text" id="tags" name="tags" value="{{ media.tags if media is defined else '' }}" placeholder="Введите теги">
+        </div>
+        {% if media is defined and media.id %}
+            <!-- Показывать только при редактировании -->
+            <div class="form-group">
+                <label for="media_file">Текущий файл:</label>
+                <p>{{ media.filename }}</p>
+            </div>
+        {% else %}
+            <!-- Показывать только при добавлении нового файла -->
+            <div class="form-group">
+                <label for="media">Медиафайл:</label>
+                <input type="file" id="media" name="media" required accept=".mp4, .avi">
+            </div>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">{{ "Сохранить изменения" if media is defined and media.id else "Загрузить" }}</button>
+    </form>
+    <form action="{{ url_for('super_admin_page') }}" method="get">
+        <button type="submit" class="btn btn-secondary">Назад</button>
+    </form>
+</div>
+{% endblock %}

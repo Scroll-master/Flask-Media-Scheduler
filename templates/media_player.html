@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    {% for message in get_flashed_messages(category_filter=["error"]) %}
+    <div class="alert alert-warning" role="alert">
+        {{ message }}
+    </div>
+    {% endfor %} <!-- Закрытие цикла for для сообщений -->
+    <h2>Видеогалерея</h2>
+    <!-- Встроенный плеер -->
+    <video id="videoPlayer" controls width="100%">
+        <source src="" type="video/mp4"> <!-- Источник видео будет устанавливаться через JavaScript -->
+        Ваш браузер не поддерживает видео тег.
+    </video>
+    
+    <!-- Таблица с медиафайлами -->
+    <table>
+        <tr>
+            <th>Название</th>
+            <th>Длительность</th>
+            <th>Статус</th>
+            <th>Теги</th>
+            <th>Действия</th>
+        </tr>
+        {% for media in media_files %}
+        <tr>
+            <td><span style="{{ 'color: red;' if media.events else '' }}">{{ media.title }}</span></td>
+            <td>{{ media.duration }}</td>
+            <td>{{ media.status }}</td>
+            <td>{{ media.tags }}</td>
+            <td>
+                <button onclick="playVideo('{{ url_for('static', filename='videos/' + media.filename) }}')">Проиграть</button>
+                <form action="{{ url_for('edit_media', media_id=media.id) }}" method="get">
+                    <button type="submit">Редактировать</button>
+                </form>
+                <form action="{{ url_for('delete_media', media_id=media.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот медиафайл?');">
+                    <button type="submit">Удалить</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+<form action="{{ url_for('new_media') }}" method="post" enctype="multipart/form-data">
+    <button type="submit" class="btn btn-secondary">Добавить новый медиафайл</button>
+</form>
+<form action="{{ url_for('super_admin_page') }}" method="get">
+    <button type="submit" class="btn btn-secondary">Назад</button>
+</form>
+<script>
+function playVideo(sourceUrl) {
+    var player = document.getElementById('videoPlayer');
+    player.src = sourceUrl;
+    player.play();
+}
+</script>
+{% endblock %}

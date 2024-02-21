@@ -28,7 +28,7 @@
             <td>{{ schedule.name }} {% if schedule.events %}<span style="color: red;">(Используется в событиях)</span>{% endif %}</td>
             <td>{{ schedule.description }}</td>
             <td>{{ schedule.type }}</td>
-            <td>ы
+            <td>
                 {% if schedule.type == 'специальная дата' and schedule.datetime %}
                     {{ schedule.datetime.strftime('%Y-%m-%d %H:%M') }}
                 {% else %}
@@ -42,7 +42,7 @@
                 <form action="{{ url_for('edit_schedule', schedule_id=schedule.id) }}" method="get">
                     <button type="submit">Редактировать</button>
                 </form>
-                <form action="{{ url_for('delete_schedule', schedule_id=schedule.id) }}" method="post">
+                <form action="{{ url_for('delete_schedule', schedule_id=schedule.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить это расписание?');">
                     <button type="submit">Удалить</button>
                 </form>
                 {% else %}
@@ -53,6 +53,33 @@
         {% endfor %}
     </tbody>
 </table>
+<h2>Медиафайлы</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Название</th>
+            <th>Файл</th>
+            <th>Дата создания</th>
+            <th>Длительность</th>
+            <th>Статус</th>
+            <th>Теги</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for media in media_files %}
+        <tr>
+            <td><span style="{{ 'color: red;' if media.events else '' }}">{{ media.title }}</span></td>
+            <td>{{ media.filename }}</td>
+            <td>{{ media.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ media.duration }}</td>
+            <td>{{ media.status }}</td>
+            <td>{{ media.tags }}</td>
+            
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
 
 <h2>События</h2>
 <table>
@@ -76,7 +103,7 @@
                 <form action="{{ url_for('edit_event', event_id=event.id) }}" method="get">
                     <button type="submit">Редактировать</button>
                 </form>
-                <form action="{{ url_for('delete_event', event_id=event.id) }}" method="post">
+                <form action="{{ url_for('delete_event', event_id=event.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить это событие?');">
                     <button type="submit">Удалить</button>
                 </form>
             </td>
@@ -93,6 +120,12 @@
 <form action="{{ url_for('new_event') }}" method="get">
     <button type="submit">Создать новое событие</button>
 </form>
+
+
+<form action="{{ url_for('media_player') }}" method="get">
+    <button type="submit">Перейти к проигрывателю медиафайлов</button>
+</form>
+
 
     <form method="GET" action="/logout">
         <button type="submit">Выйти из системы</button>
