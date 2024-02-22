@@ -321,22 +321,35 @@ def new_event():
         start_time = request.form.get('start_time')
         end_time = request.form.get('end_time')
         
+        start_datetime = datetime.strptime(start_time, '%Y-%m-%dT%H:%M')
+        end_datetime = datetime.strptime(end_time, '%Y-%m-%dT%H:%M')
+        
+        # Получаем информацию о расписании
+        schedule = Schedule.query.get(schedule_id)
+        
         # Проверка на перекрытие времени с другими событиями
         overlapping_events = Event.query.filter(
-            Event.end_time > start_time,
-            Event.start_time < end_time
+            db.and_(
+                Event.end_time > start_datetime,
+                Event.start_time < end_datetime
+            )
         ).all()
-
+        
         if overlapping_events:
             flash('Выбранное время перекрывается с другими событиями. Пожалуйста, выберите другое время.')
             return redirect(url_for('new_event'))
         # Если нет перекрытия, создаем новое событие
         
+        # Проверка соответствия события выбранному расписанию
+        if schedule.type == 'специальная дата' and (schedule.datetime and (start_datetime < schedule.datetime or end_datetime > schedule.datetime)):
+            flash('Даты события выходят за рамки даты специального расписания.')
+            return redirect(url_for('new_event'))
         # Проверка на корректность введенных данных, создание и сохранение нового события
         # Пример:
         new_event = Event(schedule_id=schedule_id, media_id=media_id, 
                           start_time=datetime.strptime(start_time, '%Y-%m-%dT%H:%M'),
                           end_time=datetime.strptime(end_time, '%Y-%m-%dT%H:%M'))
+        
         db.session.add(new_event)
         db.session.commit()
         flash('Новое событие успешно создано.')
@@ -358,6 +371,35 @@ def edit_event(event_id):
         event.media_id = request.form.get('media_id')
         event.start_time = datetime.strptime(request.form.get('start_time'), '%Y-%m-%dT%H:%M')
         event.end_time = datetime.strptime(request.form.get('end_time'), '%Y-%m-%dT%H:%M')
+        
+        schedule = Schedule.query.get(event.schedule_id)
+        
+        # Проверка соответствия даты и времени события расписанию
+        if schedule.type == 'специальная дата' and (schedule.datetime and (start_datetime < schedule.datetime or end_datetime > schedule.datetime)):
+            flash('Даты события выходят за рамки даты специального расписания.')
+            return redirect(url_for('edit_event', event_id=event_id))
+         # Преобразование строк в объекты datetime
+        start_datetime = datetime.strptime(request.form.get('start_time'), '%Y-%m-%dT%H:%M')
+        end_datetime = datetime.strptime(request.form.get('end_time'), '%Y-%m-%dT%H:%M')
+        
+         # Проверка на перекрытие времени с другими событиями
+        overlapping_events = Event.query.filter(
+            Event.id != event_id,
+            Event.schedule_id == event.schedule_id,
+            db.or_(
+                db.and_(Event.start_time <= start_datetime, Event.end_time > start_datetime),
+                db.and_(Event.start_time < end_datetime, Event.end_time >= end_datetime),
+                db.and_(Event.start_time >= start_datetime, Event.end_time <= end_datetime)
+            )
+        ).all()
+        
+        if overlapping_events:
+            flash('Выбранное время перекрывается с другими событиями или с другими событиями на том же расписании. Пожалуйста, выберите другое время.')
+            return redirect(url_for('edit_event', event_id=event_id))
+        
+        # Обновление данных события
+        event.start_time = start_datetime
+        event.end_time = end_datetime
         
         db.session.commit()
         flash('Событие успешно обновлено.')
