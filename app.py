@@ -1,29 +1,25 @@
-from flask import Flask, render_template, redirect, url_for, flash ,request, make_response
+from flask import Flask, render_template, redirect, url_for, flash, request, make_response
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
-from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip, AudioFileClip
 import pymysql
 import secrets, json, os
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename  # Добавлен для безопасной загрузки файлов
 import threading
-
+import re
 
 app = Flask(__name__)
 
 app.secret_key = secrets.token_hex(16)
-
-# Создайте объект UploadSet для медиафайлов
 
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:20120512LiBuN@localhost/Users'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'C:/Users/PC/Desktop/Python_Hope/static/videos'
 
-
 db = SQLAlchemy(app)
-
 
 
 login_manager = LoginManager()
@@ -71,31 +67,35 @@ def add_media_from_folder(folder_path):
 
     # Добавление новых медиафайлов в БД
     for filename in actual_filenames:
-        if filename.endswith((".mp4", ".avi")) and filename not in existing_media:
+        if filename.endswith((".mp4", ".avi", ".mp3")) and filename not in existing_media:
             filepath = os.path.join(folder_path, filename)
-            clip = VideoFileClip(filepath)
+            if filename.endswith((".mp4", ".avi")):  # Это видеофайл
+                clip = VideoFileClip(filepath)
+            elif filename.endswith(".mp3"):  # Это аудиофайл
+                clip = AudioFileClip(filepath)
+            else:
+                continue  # Пропустить файлы неизвестного формата
+
             duration_seconds = int(clip.duration)
             duration_formatted = f"{duration_seconds // 3600:02d}:{(duration_seconds % 3600 // 60):02d}:{duration_seconds % 60:02d}"
 
             new_media = Media(
-                title=filename,  # Используйте filename в качестве title
+                title=filename,
                 filename=filename,
                 filepath=filepath,
                 created_at=datetime.now(),
                 duration=duration_formatted,
-                tags=None,  # Изначально теги отсутствуют
-                status='Активен'  # Помечаем новый файл как активный
+                tags=None,
+                status='Активен'
             )
             db.session.add(new_media)
 
     db.session.commit()
 
-
-
-
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
 
 class Schedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -115,11 +115,43 @@ class Event(db.Model):
     end_time = db.Column(db.DateTime, nullable=False)  # Время окончания события
     media = db.relationship('Media', backref='events')
 
+
+class Node(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)
+    ip_address = db.Column(db.String(15), nullable=False)
+    location = db.Column(db.String(128))
+    status = db.Column(db.Boolean, default=True)
+    group_id = db.Column(db.Integer, db.ForeignKey('node_group.id'))
+
+class NodeGroup(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)
+    events = db.relationship('Event', secondary='nodegroup_event', backref='node_groups', lazy='dynamic')
+    nodes = db.relationship('Node', backref='group', lazy=True)
+
+
+@property
+def active_schedule_type(self):
+    now = datetime.datetime.now()
+    print(f"Checking active schedule type for NodeGroup {self.name} at {now}")
+    for event in self.events:
+        if event.start_time <= now <= event.end_time:
+            print(f"Active event found: {event.name} with schedule type {event.schedule.type}")
+            return event.schedule.type
+    print("No active events found for this NodeGroup at the current time.")
+    return None
+
+class NodeGroupEvent(db.Model):
+    __tablename__ = 'nodegroup_event'
+    node_group_id = db.Column(db.Integer, db.ForeignKey('node_group.id'), primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), primary_key=True)
+
+
+
 @app.route('/')
 def hello_world():
-    return render_template('index.html')
-        
-        
+    return render_template('index.html')   
 #@app.route('/password')
 #def passwordgem():
 #        return password_hash
@@ -182,6 +214,9 @@ def login():
     
     return render_template('login.html')
 
+@app.errorhandler(401)
+def unauthorized_error(error):
+    return render_template('unauthorized.html'), 401
 
 
 
@@ -430,15 +465,18 @@ def new_media():
     if request.method == 'POST':
         if 'media' in request.files:
             file = request.files['media']
-            if file.filename != '' and file.filename.endswith(('.mp4', '.avi')):
+            if file.filename != '' and file.filename.endswith(('.mp4', '.avi', '.mp3')):
                 tags = request.form.get('tags')  # Получение тегов из формы
                 filename = secure_filename(file.filename)
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
-                # Определение длительности видео
+                # Определение длительности файла
                 try:
-                    clip = VideoFileClip(filepath)
-                    duration = str(datetime.timedelta(seconds=int(clip.duration)))
+                    if filename.endswith(('.mp4', '.avi')):
+                        clip = VideoFileClip(filepath)
+                    else:  # Это аудиофайл
+                        clip = AudioFileClip(filepath)
+                    duration = str(timedelta(seconds=int(clip.duration)))
                 except Exception as e:
                     flash(f'Ошибка при определении длительности файла: {e}')
                     duration = None  # В случае ошибки установить длительность как None
@@ -458,6 +496,7 @@ def new_media():
         else:
             flash('Файл не выбран.')
     return render_template('edit_media.html', action='new')
+
 
 
 @app.route('/media/edit/<int:media_id>', methods=['GET', 'POST'])
@@ -508,6 +547,101 @@ def media_player():
         return "Доступ запрещен", 403
     media_files = Media.query.all()  # Получаем список всех медиафайлов из базы данных
     return render_template('media_player.html', media_files=media_files)
+
+
+@app.route('/node/new', methods=['GET', 'POST'])
+@login_required
+def new_node():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    if request.method == 'POST':
+        name = request.form.get('name')
+        ip_address = request.form.get('ip_address')
+        location = request.form.get('location')
+        
+        # Проверка уникальности имени и IP-адреса нода
+        existing_node_by_name = Node.query.filter_by(name=name).first()
+        existing_node_by_ip = Node.query.filter_by(ip_address=ip_address).first()
+        
+        if existing_node_by_name:
+            flash('Нод с таким именем уже существует.')
+            return render_template('edit_node.html', node=None)
+        
+        if existing_node_by_ip:
+            flash('Нод с таким IP-адресом уже существует.')
+            return render_template('edit_node.html', node=None)
+        
+        # Добавленная проверка корректности IP-адреса
+        if not re.match(r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$', ip_address):
+            flash('Некорректный формат IP-адреса.')
+            return render_template('edit_node.html', node=None)
+        
+        
+        # Создание и сохранение нового нода
+        new_node = Node(name=name, ip_address=ip_address, location=location, status=True)  # По умолчанию статус 'включен'
+        db.session.add(new_node)
+        db.session.commit()
+        flash('Новый нод успешно создан.')
+        return redirect(url_for('node_interface'))
+    return render_template('edit_node.html', node=None)
+
+
+@app.route('/node/edit/<int:node_id>', methods=['GET', 'POST'])
+@login_required
+def edit_node(node_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    node = Node.query.get_or_404(node_id)
+    if request.method == 'POST':
+        name = request.form.get('name')
+        ip_address = request.form.get('ip_address')
+        
+        # Проверка на уникальность имени и IP-адреса
+        existing_node = Node.query.filter(Node.id != node_id, db.or_(Node.name == name, Node.ip_address == ip_address)).first()
+        if existing_node:
+            flash('Другой нод с таким именем или IP-адресом уже существует.')
+            return render_template('edit_node.html', node=node)
+        
+        # Добавленная проверка корректности IP-адреса
+        if not re.match(r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$', ip_address):
+            flash('Некорректный формат IP-адреса.')
+            return render_template('edit_node.html', node=node)
+        
+        
+        node.name = name
+        node.ip_address = ip_address
+        node.location = request.form.get('location')
+        
+        db.session.commit()
+        flash('Нод успешно обновлен.')
+        return redirect(url_for('node_interface'))
+    
+    return render_template('edit_node.html', node=node)
+
+
+
+@app.route('/node/delete/<int:node_id>', methods=['POST'])
+@login_required
+def delete_node(node_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    node = Node.query.get_or_404(node_id)
+    if node.group:  # Проверка, не является ли нод частью группы нодов
+        flash('Нод является частью группы и не может быть удален. Пожалуйста, удалите нод из группы перед удалением.', 'error')
+        return redirect(url_for('node_interface'))
+    db.session.delete(node)
+    db.session.commit()
+    flash('Нод успешно удален.')
+    return redirect(url_for('node_interface'))
+
+
+@app.route('/node_interface')
+@login_required
+def node_interface():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+    nodes = Node.query.all()  # Получаем список всех нодов из базы данных
+    return render_template('node_interface.html', nodes=nodes)
 
 
 

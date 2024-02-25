@@ -25,12 +25,12 @@
             <!-- Показывать только при добавлении нового файла -->
             <div class="form-group">
                 <label for="media">Медиафайл:</label>
-                <input type="file" id="media" name="media" required accept=".mp4, .avi">
+                <input type="file" id="media" name="media" required accept=".mp4, .avi, .mp3">
             </div>
         {% endif %}
         <button type="submit" class="btn btn-primary">{{ "Сохранить изменения" if media is defined and media.id else "Загрузить" }}</button>
     </form>
-    <form action="{{ url_for('super_admin_page') }}" method="get">
+    <form action="{{ url_for('media_player') }}" method="get">
         <button type="submit" class="btn btn-secondary">Назад</button>
     </form>
 </div>

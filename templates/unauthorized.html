@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <h2>Доступ запрещён</h2>
+    <p>Вы должны войти в систему для доступа к этой странице.</p>
+    <form method="GET" action="{{ url_for('login') }}">
+        <button type="submit" class="btn btn-primary">Перейти к входу</button>
+    </form>
+</div>
+{% endblock %}

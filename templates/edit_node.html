@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+{% for message in get_flashed_messages() %}
+<div class="alert alert-warning" role="alert">
+    {{ message }}
+</div>
+{% endfor %}
+
+<h2>{{ "Редактировать" if node is defined and node.id else "Создать новый" }} нод</h2>
+<form method="post">
+    <div>
+        <label for="name">Название:</label>
+        <input type="text" id="name" name="name" value="{{ node.name if node else '' }}" required>
+    </div>
+    <div>
+        <label for="ip_address">IP адрес:</label>
+        <input type="text" id="ip_address" name="ip_address" value="{{ node.ip_address if node else '' }}" pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$" title="Введите корректный IP-адрес, например 192.168.1.1" required>
+    </div>
+    <div>
+        <label for="location">Местоположение:</label>
+        <input type="text" id="location" name="location" value="{{ node.location if node else '' }}">
+    </div>
+    <button type="submit">Сохранить</button>
+</form>
+
+<form action="{{ url_for('node_interface') }}" method="get">
+  <button type="submit" class="btn btn-secondary">Назад</button>
+</form>
+
+{% endblock %}

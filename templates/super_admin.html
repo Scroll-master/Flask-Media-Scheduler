@@ -126,6 +126,11 @@
     <button type="submit">Перейти к проигрывателю медиафайлов</button>
 </form>
 
+<form action="{{ url_for('node_interface') }}" method="get">
+    <button type="submit">Управление нодами</button>
+</form>
+
+
 
     <form method="GET" action="/logout">
         <button type="submit">Выйти из системы</button>

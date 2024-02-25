@@ -6,14 +6,19 @@
     <div class="alert alert-warning" role="alert">
         {{ message }}
     </div>
-    {% endfor %} <!-- Закрытие цикла for для сообщений -->
+    {% endfor %}
     <h2>Видеогалерея</h2>
     <!-- Встроенный плеер -->
-    <video id="videoPlayer" controls width="100%">
+    <video id="videoPlayer" controls style="display: none;" width="100%">
         <source src="" type="video/mp4"> <!-- Источник видео будет устанавливаться через JavaScript -->
         Ваш браузер не поддерживает видео тег.
     </video>
-    
+    <!-- Встроенный аудиоплеер -->
+    <audio id="audioPlayer" controls style="display: none;" width="100%">
+        <source src="" type="audio/mp3"> <!-- Источник аудио будет устанавливаться через JavaScript -->
+        Ваш браузер не поддерживает аудио тег.
+    </audio>
+
     <!-- Таблица с медиафайлами -->
     <table>
         <tr>
@@ -30,7 +35,7 @@
             <td>{{ media.status }}</td>
             <td>{{ media.tags }}</td>
             <td>
-                <button onclick="playVideo('{{ url_for('static', filename='videos/' + media.filename) }}')">Проиграть</button>
+                <button onclick="playMedia('{{ url_for('static', filename='videos/' + media.filename) }}', '{{ media.filename }}')">Проиграть</button>
                 <form action="{{ url_for('edit_media', media_id=media.id) }}" method="get">
                     <button type="submit">Редактировать</button>
                 </form>
@@ -49,10 +54,21 @@
     <button type="submit" class="btn btn-secondary">Назад</button>
 </form>
 <script>
-function playVideo(sourceUrl) {
-    var player = document.getElementById('videoPlayer');
-    player.src = sourceUrl;
-    player.play();
+function playMedia(sourceUrl, filename) {
+    var videoPlayer = document.getElementById('videoPlayer');
+    var audioPlayer = document.getElementById('audioPlayer');
+    // Определяем тип медиа по расширению файла
+    if (filename.endsWith('.mp4') || filename.endsWith('.avi')) {
+        videoPlayer.src = sourceUrl;
+        videoPlayer.style.display = '';
+        audioPlayer.style.display = 'none';
+        videoPlayer.play();
+    } else if (filename.endsWith('.mp3')) {
+        audioPlayer.src = sourceUrl;
+        audioPlayer.style.display = '';
+        videoPlayer.style.display = 'none';
+        audioPlayer.play();
+    }
 }
 </script>
 {% endblock %}
