@@ -8,42 +8,67 @@
     </div>
     {% endfor %}
     
-    <h2>Ноды</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Название</th>
-                <th>IP Адрес</th>
-                <th>Местоположение</th>
-                <th>Статус</th>
-                <th>Действия</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for node in nodes %}
-            <tr>
-                <td>{{ node.name }}</td>
-                <td>{{ node.ip_address }}</td>
-                <td>{{ node.location }}</td>
-                <td>{{ 'Включен' if node.status else 'Выключен' }}</td>
-                <td>
-                    <form action="{{ url_for('edit_node', node_id=node.id) }}" method="get">
-                        <button type="submit">Редактировать</button>
-                    </form>
-                    <form action="{{ url_for('delete_node', node_id=node.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот нод?');">
-                        <button type="submit">Удалить</button>
-                    </form>
-                </td>
-            </tr>
+    <h2>Группы Нодов</h2>
+    {% for group in node_groups %}
+    <div class="node-group">
+        <h3>{{ group.name }}</h3>
+        <div>События:</div>
+        <ul>
+            {% for event in group.events %}
+            <li>{{ event.schedule.name }} ({{ event.start_time }} - {{ event.end_time }})</li>
+            {% else %}
+            <li>Нет событий</li>
             {% endfor %}
-        </tbody>
-    </table>
-</div>
-<form action="{{ url_for('new_node') }}" method="get">
-    <button type="submit" class="btn btn-secondary">Добавить новый нод</button>
-</form>
+        </ul>
+        <div>Ноды в этой группе:</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>IP Адрес</th>
+                    <th>Местоположение</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for node in group.nodes %}
+                <tr>
+                    <td>{{ node.name }}</td>
+                    <td>{{ node.ip_address }}</td>
+                    <td>{{ node.location }}</td>
+                    <td>{{ 'Включен' if node.status else 'Выключен' }}</td>
+                    <td>
+                        <form action="{{ url_for('edit_node', node_id=node.id) }}" method="get">
+                            <button type="submit" class="btn btn-secondary">Редактировать</button>
+                        </form>
+                        <form action="{{ url_for('delete_node', node_id=node.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот нод?');">
+                            <button type="submit" class="btn btn-danger">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <form action="{{ url_for('edit_nodegroup', nodegroup_id=group.id) }}" method="get">
+            <button type="submit" class="btn btn-secondary">Редактировать группу</button>
+        </form>
+        <form action="{{ url_for('delete_nodegroup', nodegroup_id=group.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить эту группу нодов?');">
+            <button type="submit" class="btn btn-danger">Удалить группу</button>
+        </form>
+    </div>
+    {% endfor %}
 
-<form action="{{ url_for('super_admin_page') }}" method="get">
-    <button type="submit" class="btn btn-secondary">Назад</button>
-</form>
+    <form action="{{ url_for('new_node') }}" method="get">
+        <button type="submit" class="btn btn-primary">Добавить новый нод</button>
+    </form>
+
+    <form action="{{ url_for('new_nodegroup') }}" method="get">
+        <button type="submit" class="btn btn-primary">Добавить новую группу нодов</button>
+    </form>
+
+    <form action="{{ url_for('super_admin_page') }}" method="get">
+        <button type="submit" class="btn btn-secondary">Назад</button>
+    </form>
+</div>
 {% endblock %}

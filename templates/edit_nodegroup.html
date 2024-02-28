@@ -1,12 +1,50 @@
 {% extends 'base.html' %}
 
 {% block content %}
+{% for message in get_flashed_messages() %}
+    <div class="alert alert-warning" role="alert">
+        {{ message }}
+    </div>
+{% endfor %}
 <div class="container">
-    <h2>Edit Node Group</h2>
-    <!-- Форма для редактирования групп нод -->
-    <form method="post">
-        <!-- Поля ввода -->
+    <h2>{{ "Редактировать" if nodegroup is defined and nodegroup.id else "Создать новую" }} группу нодов</h2>
+    <!-- Форма для редактирования или создания групп нод -->
+    <form method="post" action="{{ url_for('edit_nodegroup', nodegroup_id=nodegroup.id) if nodegroup and nodegroup.id else url_for('new_nodegroup') }}">
+        <!-- Поле для названия группы нод -->
+        <div class="form-group">
+            <label for="name">Group Name:</label>
+            <input type="text" class="form-control" id="name" name="name" value="{{ nodegroup.name if nodegroup else '' }}" required>
+        </div>
+
+        <!-- Список доступных нод для добавления в группу -->
+        <h3>Available Nodes</h3>
+        <div class="form-group">
+            {% for node in nodes %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="node_ids" value="{{ node.id }}" id="node_{{ node.id }}" {{ 'checked' if node in nodegroup.nodes }}>
+                    <label class="form-check-label" for="node_{{ node.id }}">
+                        {{ node.name }} ({{ node.ip_address }})
+                    </label>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Список доступных событий для добавления в группу -->
+        <h3>Available Events</h3>
+        <div class="form-group">
+            {% for event in events %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="event_{{ event.id }}" {{ 'checked' if event in nodegroup.events }}>
+                    <label class="form-check-label" for="event_{{ event.id }}">
+                        {{ event.schedule.name }} ({{ event.start_time.strftime('%Y-%m-%d %H:%M') }} - {{ event.end_time.strftime('%Y-%m-%d %H:%M') }})
+                    </label>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Кнопка для сохранения изменений -->
         <button type="submit" class="btn btn-success">Save Changes</button>
     </form>
 </div>
 {% endblock %}
+

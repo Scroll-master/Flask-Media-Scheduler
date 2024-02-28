@@ -2,6 +2,43 @@
 
 {% block content %}
 
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const nameInput = document.getElementById('name');
+        nameInput.addEventListener("blur", function() {
+            const name = this.value;
+            if (name) {
+                fetch(`/check_node_name?name=${encodeURIComponent(name)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.is_unique) {
+                        alert(`Нод с именем '${name}' уже существует.`);
+                        this.value = '';
+                        this.focus();
+                    }
+                });
+            }
+        });
+    
+        const ipInput = document.getElementById('ip_address');
+        ipInput.addEventListener("blur", function() {
+            const ip = this.value;
+            if (ip) {
+                fetch(`/check_ip?ip=${ip}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.is_unique) {
+                        alert(`IP ${ip} уже используется.`);
+                        this.value = '';
+                        this.focus();
+                    }
+                });
+            }
+        });
+    });
+</script>
+    
+
 {% for message in get_flashed_messages() %}
 <div class="alert alert-warning" role="alert">
     {{ message }}
@@ -24,6 +61,27 @@
     </div>
     <button type="submit">Сохранить</button>
 </form>
+
+<h2>Существующие ноды</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Имя</th>
+            <th>IP-адрес</th>
+            <th>Группа</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for node in existing_nodes %}
+        <tr>
+            <td>{{ node.name }}</td>
+            <td>{{ node.ip_address }}</td>
+            <td>{{ node.group.name if node.group else 'Нет группы' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
 
 <form action="{{ url_for('node_interface') }}" method="get">
   <button type="submit" class="btn btn-secondary">Назад</button>

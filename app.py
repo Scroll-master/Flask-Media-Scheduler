@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, make_response
+from flask import Flask, render_template, redirect, url_for, flash, request, make_response, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 from moviepy.editor import VideoFileClip, AudioFileClip
@@ -451,6 +451,12 @@ def delete_event(event_id):
     if current_user.role != 'master':
         return "Доступ запрещен", 403
     event = Event.query.get_or_404(event_id)
+    
+    # Проверяем, связано ли событие с какими-либо группами нодов
+    if len(event.node_groups) > 0:  # Используем len() для проверки количества связанных групп нодов
+        flash('Событие не может быть удалено, так как оно является частью одной или нескольких групп нодов.', 'error')
+        return redirect(url_for('super_admin_page'))
+    
     db.session.delete(event)
     db.session.commit()
     flash('Событие успешно удалено.')
@@ -554,6 +560,10 @@ def media_player():
 def new_node():
     if current_user.role != 'master':
         return "Доступ запрещен", 403
+    
+     # Получение всех существующих нодов для отображения на странице
+    existing_nodes = Node.query.all()
+
     if request.method == 'POST':
         name = request.form.get('name')
         ip_address = request.form.get('ip_address')
@@ -583,7 +593,7 @@ def new_node():
         db.session.commit()
         flash('Новый нод успешно создан.')
         return redirect(url_for('node_interface'))
-    return render_template('edit_node.html', node=None)
+    return render_template('edit_node.html', node=None, existing_nodes=existing_nodes)
 
 
 @app.route('/node/edit/<int:node_id>', methods=['GET', 'POST'])
@@ -591,7 +601,12 @@ def new_node():
 def edit_node(node_id):
     if current_user.role != 'master':
         return "Доступ запрещен", 403
+    
     node = Node.query.get_or_404(node_id)
+    
+    # Получение всех существующих нодов кроме редактируемого
+    existing_nodes = Node.query.filter(Node.id != node_id).all()
+    
     if request.method == 'POST':
         name = request.form.get('name')
         ip_address = request.form.get('ip_address')
@@ -616,7 +631,7 @@ def edit_node(node_id):
         flash('Нод успешно обновлен.')
         return redirect(url_for('node_interface'))
     
-    return render_template('edit_node.html', node=node)
+    return render_template('edit_node.html', node=node, existing_nodes=existing_nodes)
 
 
 
@@ -641,9 +656,246 @@ def node_interface():
     if current_user.role != 'master':
         return "Доступ запрещен", 403
     nodes = Node.query.all()  # Получаем список всех нодов из базы данных
-    return render_template('node_interface.html', nodes=nodes)
+    node_groups = NodeGroup.query.all()  # Получаем список всех групп нодов, если нужно
+    events = Event.query.all()  # Получаем список всех событий, если это необходимо для интерфейса
+    # Можете добавить другие запросы для получения дополнительных данных
+    return render_template('node_interface.html', nodes=nodes, node_groups=node_groups, events=events)
 
 
+@app.route('/nodegroup/new', methods=['GET', 'POST'])
+@login_required
+def new_nodegroup():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+
+    if request.method == 'POST':
+        name = request.form.get('name')
+        node_ids = request.form.getlist('node_ids')  # Получаем список ID нодов
+        event_ids = request.form.getlist('event_ids')  # Получаем список ID событий
+
+        # Проверяем, существует ли уже группа с таким именем
+        existing_group = NodeGroup.query.filter_by(name=name).first()
+        if existing_group:
+            flash('Группа с таким именем уже существует.')
+            return redirect(url_for('new_nodegroup'))
+
+        if not name or not node_ids or not event_ids:
+            flash('Пожалуйста, заполните все поля.')
+            return redirect(url_for('new_nodegroup'))
+
+        new_group = NodeGroup(name=name)
+
+        # Добавляем ноды в группу
+        for node_id in node_ids:
+            node = Node.query.get(node_id)
+            if node and not node.group_id:  # Проверяем, не принадлежит ли нод уже какой-либо группе
+                new_group.nodes.append(node)
+            elif node:
+                flash(f'Нод {node.name} с IP-адресом {node.ip_address} уже принадлежит другой группе.')
+                continue  # Продолжаем обрабатывать следующие ноды, не прерывая цикл
+
+        # Добавляем события в группу
+        for event_id in event_ids:
+            event = Event.query.get(event_id)
+            if event:
+                new_group.events.append(event)
+
+        db.session.add(new_group)
+        db.session.commit()
+        flash('Новая группа нодов успешно создана.')
+        return redirect(url_for('node_interface'))
+
+    else:
+        # Передаем данные для формы
+        # Передаем данные для формы: выбираем ноды, которые не принадлежат никакой группе
+        available_nodes = Node.query.filter(Node.group_id.is_(None)).all()
+        events = Event.query.all()  # Добавляем загрузку всех событий для передачи в шаблон
+        return render_template('edit_nodegroup.html',nodegroup=None, nodes=available_nodes, events=events)  # Используйте правильный шаблон для создания
+
+
+@app.route('/nodegroup/edit/<int:nodegroup_id>', methods=['GET', 'POST'])
+@login_required
+def edit_nodegroup(nodegroup_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+
+    nodegroup = NodeGroup.query.get_or_404(nodegroup_id)
+
+    if request.method == 'POST':
+        name = request.form.get('name').strip()
+        if not name:
+            flash('Название группы не может быть пустым.')
+            return redirect(url_for('edit_nodegroup', nodegroup_id=nodegroup_id))
+
+        selected_node_ids = set(request.form.getlist('node_ids'))
+        selected_event_ids = set(request.form.getlist('event_ids'))
+
+        # Проверяем, существует ли другая группа с таким же именем
+        print(f"Checking for existing groups with name {name} excluding group {nodegroup_id}")
+        existing_group = NodeGroup.query.filter(NodeGroup.id != nodegroup_id, NodeGroup.name == name).first()
+        if existing_group:
+            print(f"Found conflicting group with ID {existing_group.id}")
+            flash('Группа нодов с таким именем уже существует.')
+            return redirect(url_for('edit_nodegroup', nodegroup_id=nodegroup_id))
+
+        # Обновляем данные группы
+        nodegroup.name = name
+
+        # Обновляем ноды и события в группе
+        update_nodegroup_members(nodegroup, selected_node_ids, selected_event_ids)
+
+        db.session.commit()
+        flash('Группа нодов успешно обновлена.')
+        return redirect(url_for('node_interface'))
+
+    else:
+        # Фильтрация нодов: выбираем те, что не принадлежат другим группам или уже входят в текущую группу
+        available_nodes = Node.query.filter(db.or_(Node.group_id == None, Node.group_id == nodegroup_id)).all()
+        all_events = Event.query.all()  # Загрузка всех событий для передачи в шаблон
+        return render_template('edit_nodegroup.html', nodegroup=nodegroup, nodes=available_nodes, events=all_events)
+
+
+def update_nodegroup_members(nodegroup, selected_node_ids, selected_event_ids):
+    """Обновляет состав нодов и событий в группе."""
+    # Обновляем ноды в группе
+    # Получаем текущий список ID нодов в группе
+    current_node_ids = {node.id for node in nodegroup.nodes}
+
+    # Добавляем новые ноды к группе
+    for node_id in selected_node_ids:
+        if node_id not in current_node_ids:
+            node = Node.query.get(node_id)
+            if node and (node.group_id is None or node.group_id == nodegroup.id):
+                nodegroup.nodes.append(node)
+
+    # Удаляем ноды, которые были удалены из группы
+    for node in list(nodegroup.nodes):
+        if str(node.id) not in selected_node_ids:
+            nodegroup.nodes.remove(node)
+
+    # Обновляем события в группе
+    # Получаем текущий список ID событий в группе
+    current_event_ids = {event.id for event in nodegroup.events}
+
+    # Добавляем новые события к группе
+    for event_id in selected_event_ids:
+        if event_id not in current_event_ids:
+            event = Event.query.get(event_id)
+            if event:
+                # Проверка на наличие существующей связи между группой и событием
+                if not any(e.id == event.id for e in nodegroup.events):
+                    nodegroup.events.append(event)
+
+    # Удаляем события, которые были удалены из группы
+    for event in list(nodegroup.events):
+        if str(event.id) not in selected_event_ids:
+            nodegroup.events.remove(event)
+
+
+
+
+
+
+@app.route('/nodegroup/delete/<int:nodegroup_id>', methods=['POST'])
+@login_required
+def delete_nodegroup(nodegroup_id):
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+
+    nodegroup = NodeGroup.query.get_or_404(nodegroup_id)
+
+    # Проверяем, не связаны ли с группой нодов какие-либо события
+    if nodegroup.events.count() > 0:
+        event_ids = ", ".join(str(event.id) for event in nodegroup.events.all())
+        flash(f'Невозможно удалить группу {nodegroup.name}, так как она связана с событиями: {event_ids}', 'error')
+        return redirect(url_for('node_interface'))
+
+    if nodegroup.nodes:
+        flash(f'Невозможно удалить группу {nodegroup.name}, так как она содержит ноды: {", ".join([node.name for node in nodegroup.nodes])}.', 'error')
+        return redirect(url_for('node_interface'))
+
+    db.session.delete(nodegroup)
+    db.session.commit()
+    flash('Группа нодов успешно удалена.')
+    return redirect(url_for('node_interface'))
+
+
+@app.route('/add_node_to_group', methods=['POST'])
+@login_required
+def add_node_to_group():
+    if current_user.role != 'master':
+        flash('Доступ запрещен', 'danger')
+        return redirect(url_for('node_interface'))
+
+    node_id = request.form.get('node_id')
+    group_id = request.form.get('group_id')
+
+    node = Node.query.get(node_id)
+    if node:
+        node.group_id = group_id
+        db.session.commit()
+        flash('Узел успешно добавлен в группу', 'success')
+    else:
+        flash('Узел не найден', 'danger')
+
+    return redirect(url_for('edit_nodegroup', id=group_id))
+
+@app.route('/remove_node_from_group', methods=['POST'])
+@login_required
+def remove_node_from_group():
+    if current_user.role != 'master':
+        flash('Доступ запрещен', 'danger')
+        return redirect(url_for('node_interface'))
+
+    node_id = request.form.get('node_id')
+    node = Node.query.get(node_id)
+    if node:
+        group_id = node.group_id
+        node.group_id = None
+        db.session.commit()
+        flash('Узел успешно удален из группы', 'success')
+    else:
+        flash('Узел не найден', 'danger')
+
+    return redirect(url_for('edit_nodegroup', id=group_id if group_id else None))
+
+@app.route('/add_event_to_group', methods=['POST'])
+@login_required
+def add_event_to_group():
+    if current_user.role != 'master':
+        flash('Доступ запрещен', 'danger')
+        return redirect(url_for('index'))
+
+    event_id = request.form.get('event_id')
+    group_id = request.form.get('group_id')
+
+    # Создаем новую связь между событием и группой
+    node_group_event = NodeGroupEvent(node_group_id=group_id, event_id=event_id)
+    db.session.add(node_group_event)
+    db.session.commit()
+    flash('Событие успешно добавлено в группу', 'success')
+    return redirect(url_for('edit_nodegroup', id=group_id))
+
+@app.route('/remove_event_from_group', methods=['POST'])
+@login_required
+def remove_event_from_group():
+    if current_user.role != 'master':
+        flash('Доступ запрещен', 'danger')
+        return redirect(url_for('index'))
+
+    event_id = request.form.get('event_id')
+    group_id = request.form.get('group_id')
+
+    # Удаляем связь между событием и группой
+    node_group_event = NodeGroupEvent.query.filter_by(node_group_id=group_id, event_id=event_id).first()
+    if node_group_event:
+        db.session.delete(node_group_event)
+        db.session.commit()
+        flash('Событие успешно удалено из группы', 'success')
+    else:
+        flash('Связь не найдена', 'danger')
+
+    return redirect(url_for('edit_nodegroup', id=group_id))
 
 
 
