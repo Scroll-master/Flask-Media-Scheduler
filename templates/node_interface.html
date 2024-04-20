@@ -67,8 +67,15 @@
         <button type="submit" class="btn btn-primary">Добавить новую группу нодов</button>
     </form>
 
+    <form action="{{ url_for('export_preset_route') }}" method="get">
+        <button type="submit">Экспортировать данные</button>
+    </form>
+
     <form action="{{ url_for('super_admin_page') }}" method="get">
         <button type="submit" class="btn btn-secondary">Назад</button>
     </form>
+    
+    
+
 </div>
 {% endblock %}

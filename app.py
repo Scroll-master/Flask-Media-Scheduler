@@ -793,9 +793,6 @@ def update_nodegroup_members(nodegroup, selected_node_ids, selected_event_ids):
 
 
 
-
-
-
 @app.route('/nodegroup/delete/<int:nodegroup_id>', methods=['POST'])
 @login_required
 def delete_nodegroup(nodegroup_id):
@@ -896,6 +893,98 @@ def remove_event_from_group():
         flash('Связь не найдена', 'danger')
 
     return redirect(url_for('edit_nodegroup', id=group_id))
+
+
+def export_data_to_json(preset_name):
+    data = {'node_groups': []}
+
+    # Получаем все группы нодов
+    node_groups = NodeGroup.query.all()
+
+    # Обходим каждую группу нодов
+    for group in node_groups:
+        group_data = {
+            'name': group.name,
+            'nodes': [],
+            'events': []
+        }
+
+        # Добавляем данные о нодах в группе
+        for node in group.nodes:
+            node_data = {
+                'id': node.id,
+                'name': node.name,
+                'ip_address': node.ip_address,
+                'location': node.location,
+                'status': node.status
+            }
+            group_data['nodes'].append(node_data)
+
+        # Добавляем данные о событиях, связанных с группой
+        for event in group.events:
+            event_data = {
+                'id': event.id,
+                'schedule_id': event.schedule_id,
+                'media_id': event.media_id,
+                'start_time': event.start_time.isoformat(),
+                'end_time': event.end_time.isoformat()
+                # Добавьте любые другие детали о событии, которые вы хотите экспортировать
+            }
+            group_data['events'].append(event_data)
+
+        data['node_groups'].append(group_data)
+
+    # Путь к файлу JSON
+    json_file_path = os.path.join(app.root_path, 'static', 'SaveJson', f'{preset_name}.json')
+
+    # Очищаем файл от информации перед сохранением новых данных
+    with open(json_file_path, 'w') as f:
+        f.truncate(0)
+
+    # Сохраняем данные в JSON файл
+    with open(json_file_path, 'w') as f:
+        json.dump(data, f, indent=4)
+
+    return 'Data exported successfully.'
+
+
+import os
+
+@app.route('/export_preset', methods=['GET', 'POST'])
+@login_required
+def export_preset_route():
+    if request.method == 'POST':
+        if current_user.role != 'master':
+            return "Доступ запрещен", 403
+
+        preset_name = request.form.get('preset_name')
+
+        # Если пользователь не ввел название пресета, вернем ошибку
+        if not preset_name:
+            flash('Пожалуйста, введите название пресета.')
+            return redirect(url_for('export_preset_route'))
+
+        # Проверяем, существует ли файл с таким же названием
+        json_file_path = os.path.join(app.root_path, 'static', 'SaveJson', f'{preset_name}.json')
+        if os.path.exists(json_file_path):
+            flash(f'Файл с названием "{preset_name}" уже существует.', 'error')
+            return redirect(url_for('export_preset_route'))
+
+        # Вызываем функцию экспорта данных
+        export_data_to_json(preset_name)
+
+        flash(f'Пресет "{preset_name}" успешно создан.')
+        return redirect(url_for('node_interface'))
+
+    # Добавим возврат для случая GET запроса
+    return render_template('create_export_preset.html')
+
+
+
+
+
+
+
 
 
 

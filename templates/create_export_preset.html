@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Node Groups{% endblock %}
+
+{% block content %}
+{% for message in get_flashed_messages(category_filter=["error"]) %}
+<div class="alert alert-warning" role="alert">
+    {{ message }}
+</div>
+{% endfor %}
+
+    <h1>Edit Node Groups</h1>
+
+    <form action="/export_preset" method="POST">
+        <label for="preset_name">Название пресета:</label>
+        <input type="text" id="preset_name" name="preset_name" required>
+        <button type="submit">Создать пресет</button>
+    </form>
+
+    <form action="{{ url_for('node_interface') }}" method="get">
+        <button type="submit" class="btn btn-secondary">Назад</button>
+    </form>
+{% endblock %}

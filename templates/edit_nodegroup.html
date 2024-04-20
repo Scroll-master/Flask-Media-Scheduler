@@ -45,6 +45,9 @@
         <!-- Кнопка для сохранения изменений -->
         <button type="submit" class="btn btn-success">Save Changes</button>
     </form>
+    <form action="{{ url_for('node_interface') }}" method="get">
+        <button type="submit" class="btn btn-secondary">Назад</button>
+    </form>
 </div>
 {% endblock %}
 
