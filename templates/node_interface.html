@@ -71,6 +71,31 @@
         <button type="submit">Экспортировать данные</button>
     </form>
 
+        <h2>Import Node Group Data</h2>
+    <table>
+        <tbody>
+            {% for preset_file in saved_presets %}
+            <tr>
+                <td>{{ preset_file }}</td>
+                <td>
+                    <form action="{{ url_for('import_preset_route') }}" method="POST" style="display: inline;">
+                        <input type="hidden" name="preset_name" value="{{ preset_file }}">
+                        <button type="submit" class="btn btn-primary">Import</button>
+                    </form>
+                    <form action="{{ url_for('delete_preset_route') }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this preset?');">
+                        <input type="hidden" name="preset_name" value="{{ preset_file }}">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    
+
+
+
     <form action="{{ url_for('super_admin_page') }}" method="get">
         <button type="submit" class="btn btn-secondary">Назад</button>
     </form>

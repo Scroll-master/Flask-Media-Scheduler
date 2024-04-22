@@ -1,6 +1,7 @@
 from flask import Flask, render_template, redirect, url_for, flash, request, make_response, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import SQLAlchemyError
 from moviepy.editor import VideoFileClip, AudioFileClip
 import pymysql
 import secrets, json, os
@@ -249,6 +250,9 @@ def super_admin_page():
     return render_template('super_admin.html', schedules=schedules, events=events, media_files=media_files)
 
 
+
+
+
 #Маршрут для создания нового расписания:
 @app.route('/schedule/new', methods=['GET', 'POST'])
 @login_required
@@ -348,9 +352,8 @@ def delete_schedule(schedule_id):
 def new_event():
     if current_user.role != 'master':
         return "Доступ запрещен", 403
-    event = None
+
     if request.method == 'POST':
-        # Здесь будет логика обработки данных формы для создания нового события
         schedule_id = request.form.get('schedule_id')
         media_id = request.form.get('media_id')
         start_time = request.form.get('start_time')
@@ -359,9 +362,14 @@ def new_event():
         start_datetime = datetime.strptime(start_time, '%Y-%m-%dT%H:%M')
         end_datetime = datetime.strptime(end_time, '%Y-%m-%dT%H:%M')
         
-        # Получаем информацию о расписании
         schedule = Schedule.query.get(schedule_id)
-        
+        if not schedule:
+            flash('Указанное расписание не найдено.')
+            return redirect(url_for('new_event'))
+
+        current_type = schedule.type
+        current_priority = get_priority(current_type)
+
         # Проверка на перекрытие времени с другими событиями
         overlapping_events = Event.query.filter(
             db.and_(
@@ -369,30 +377,40 @@ def new_event():
                 Event.start_time < end_datetime
             )
         ).all()
-        
-        if overlapping_events:
-            flash('Выбранное время перекрывается с другими событиями. Пожалуйста, выберите другое время.')
-            return redirect(url_for('new_event'))
+
+        for event in overlapping_events:
+        # Проверяем, может ли текущее событие перекрыть существующее
+            if get_priority(event.schedule.type) >= current_priority and not can_override(current_type, event.schedule.type):
+                flash(f'Выбранное время перекрывается с событием ID {event.id}, которое не может быть перекрыто.')
+                return redirect(url_for('new_event'))
+
         # Если нет перекрытия, создаем новое событие
-        
-        # Проверка соответствия события выбранному расписанию
-        if schedule.type == 'специальная дата' and (schedule.datetime and (start_datetime < schedule.datetime or end_datetime > schedule.datetime)):
-            flash('Даты события выходят за рамки даты специального расписания.')
-            return redirect(url_for('new_event'))
-        # Проверка на корректность введенных данных, создание и сохранение нового события
-        # Пример:
-        new_event = Event(schedule_id=schedule_id, media_id=media_id, 
-                          start_time=datetime.strptime(start_time, '%Y-%m-%dT%H:%M'),
-                          end_time=datetime.strptime(end_time, '%Y-%m-%dT%H:%M'))
-        
+        new_event = Event(schedule_id=schedule_id, media_id=media_id, start_time=start_datetime, end_time=end_datetime)
         db.session.add(new_event)
         db.session.commit()
         flash('Новое событие успешно создано.')
         return redirect(url_for('super_admin_page'))
+
     else:
         schedules = Schedule.query.all()
         media_files = Media.query.all()
         return render_template('edit_event.html', event=None, schedules=schedules, media_files=media_files)
+
+def get_priority(schedule_type):
+    priorities = {
+        'исключение': 3,
+        'специальная дата': 2,
+        'повседневное': 1
+    }
+    return priorities.get(schedule_type, 0)  # Возвращаем 0 для неизвестных типов
+
+def can_override(event_type, other_event_type):
+    overriding_rules = {
+        'исключение': ['повседневное', 'специальная дата', 'исключение'],
+        'специальная дата': ['повседневное'],
+        'повседневное': []
+    }
+    return other_event_type in overriding_rules[event_type]
 
 
 @app.route('/event/edit/<int:event_id>', methods=['GET', 'POST'])
@@ -400,45 +418,52 @@ def new_event():
 def edit_event(event_id):
     if current_user.role != 'master':
         return "Доступ запрещен", 403
+
     event = Event.query.get_or_404(event_id)
+
     if request.method == 'POST':
-        event.schedule_id = request.form.get('schedule_id')
-        event.media_id = request.form.get('media_id')
-        event.start_time = datetime.strptime(request.form.get('start_time'), '%Y-%m-%dT%H:%M')
-        event.end_time = datetime.strptime(request.form.get('end_time'), '%Y-%m-%dT%H:%M')
+        schedule_id = request.form.get('schedule_id')
+        media_id = request.form.get('media_id')
+        start_time = request.form.get('start_time')
+        end_time = request.form.get('end_time')
         
-        schedule = Schedule.query.get(event.schedule_id)
+        start_datetime = datetime.strptime(start_time, '%Y-%m-%dT%H:%M')
+        end_datetime = datetime.strptime(end_time, '%Y-%m-%dT%H:%M')
         
-        # Проверка соответствия даты и времени события расписанию
-        if schedule.type == 'специальная дата' and (schedule.datetime and (start_datetime < schedule.datetime or end_datetime > schedule.datetime)):
-            flash('Даты события выходят за рамки даты специального расписания.')
+        schedule = Schedule.query.get(schedule_id)
+        if not schedule:
+            flash('Указанное расписание не найдено.')
             return redirect(url_for('edit_event', event_id=event_id))
-         # Преобразование строк в объекты datetime
-        start_datetime = datetime.strptime(request.form.get('start_time'), '%Y-%m-%dT%H:%M')
-        end_datetime = datetime.strptime(request.form.get('end_time'), '%Y-%m-%dT%H:%M')
-        
-         # Проверка на перекрытие времени с другими событиями
+
+        current_type = schedule.type
+        current_priority = get_priority(current_type)
+
+        # Проверка на перекрытие времени с другими событиями
         overlapping_events = Event.query.filter(
             Event.id != event_id,
-            Event.schedule_id == event.schedule_id,
+            Event.schedule_id == schedule_id,
             db.or_(
                 db.and_(Event.start_time <= start_datetime, Event.end_time > start_datetime),
                 db.and_(Event.start_time < end_datetime, Event.end_time >= end_datetime),
                 db.and_(Event.start_time >= start_datetime, Event.end_time <= end_datetime)
             )
         ).all()
-        
-        if overlapping_events:
-            flash('Выбранное время перекрывается с другими событиями или с другими событиями на том же расписании. Пожалуйста, выберите другое время.')
-            return redirect(url_for('edit_event', event_id=event_id))
-        
+
+        for ev in overlapping_events:
+            if get_priority(ev.schedule.type) >= current_priority and not can_override(current_type, ev.schedule.type):
+                flash(f'Выбранное время перекрывается с событием ID {ev.id}, которое не может быть перекрыто.')
+                return redirect(url_for('edit_event', event_id=event_id))
+
         # Обновление данных события
+        event.schedule_id = schedule_id
+        event.media_id = media_id
         event.start_time = start_datetime
         event.end_time = end_datetime
         
         db.session.commit()
         flash('Событие успешно обновлено.')
         return redirect(url_for('super_admin_page'))
+
     else:
         schedules = Schedule.query.all()
         media_files = Media.query.all()
@@ -655,11 +680,12 @@ def delete_node(node_id):
 def node_interface():
     if current_user.role != 'master':
         return "Доступ запрещен", 403
+    saved_presets = get_saved_presets()  # Получаем список сохраненных пресетов
     nodes = Node.query.all()  # Получаем список всех нодов из базы данных
     node_groups = NodeGroup.query.all()  # Получаем список всех групп нодов, если нужно
     events = Event.query.all()  # Получаем список всех событий, если это необходимо для интерфейса
     # Можете добавить другие запросы для получения дополнительных данных
-    return render_template('node_interface.html', nodes=nodes, node_groups=node_groups, events=events)
+    return render_template('node_interface.html', nodes=nodes, node_groups=node_groups, events=events, saved_presets=saved_presets)
 
 
 @app.route('/nodegroup/new', methods=['GET', 'POST'])
@@ -801,20 +827,33 @@ def delete_nodegroup(nodegroup_id):
 
     nodegroup = NodeGroup.query.get_or_404(nodegroup_id)
 
-    # Проверяем, не связаны ли с группой нодов какие-либо события
-    if nodegroup.events.count() > 0:
-        event_ids = ", ".join(str(event.id) for event in nodegroup.events.all())
-        flash(f'Невозможно удалить группу {nodegroup.name}, так как она связана с событиями: {event_ids}', 'error')
-        return redirect(url_for('node_interface'))
+    # Если удаление инициировано процессом импорта
+    if request.headers.get('Referer') and 'import_preset' in request.headers.get('Referer'):
+        # Обнуляем group_id у всех нодов, которые принадлежали группе
+        for node in nodegroup.nodes:
+            node.group_id = None
+        # Удаляем связи из промежуточной таблицы NodeGroupEvent
+        NodeGroupEvent.query.filter_by(node_group_id=nodegroup_id).delete()
+        # Удаляем саму группу
+        db.session.delete(nodegroup)
+        db.session.commit()
+        flash('Группа нодов успешно удалена через импорт.', 'success')
+    else:
+        # Проверяем, не связаны ли с группой нодов какие-либо события или ноды
+        if nodegroup.events.first() is not None or len(nodegroup.nodes) > 0:
+            event_ids = ", ".join(str(event.id) for event in nodegroup.events.all())
+            node_ids = ", ".join(str(node.id) for node in nodegroup.nodes)
+            flash(f'Группа {nodegroup.name} связана с событиями: {event_ids} и нодами: {node_ids}.', 'error')
+        else:
+            # Удаляем связи из промежуточной таблицы NodeGroupEvent
+            NodeGroupEvent.query.filter_by(node_group_id=nodegroup_id).delete()
+            # Удаляем саму группу
+            db.session.delete(nodegroup)
+            db.session.commit()
+            flash('Группа нодов успешно удалена.', 'success')
 
-    if nodegroup.nodes:
-        flash(f'Невозможно удалить группу {nodegroup.name}, так как она содержит ноды: {", ".join([node.name for node in nodegroup.nodes])}.', 'error')
-        return redirect(url_for('node_interface'))
-
-    db.session.delete(nodegroup)
-    db.session.commit()
-    flash('Группа нодов успешно удалена.')
     return redirect(url_for('node_interface'))
+
 
 
 @app.route('/add_node_to_group', methods=['POST'])
@@ -948,8 +987,6 @@ def export_data_to_json(preset_name):
     return 'Data exported successfully.'
 
 
-import os
-
 @app.route('/export_preset', methods=['GET', 'POST'])
 @login_required
 def export_preset_route():
@@ -980,6 +1017,145 @@ def export_preset_route():
     return render_template('create_export_preset.html')
 
 
+def get_saved_presets():
+    """Получает список сохраненных пресетов из папки сохранений."""
+    save_json_dir = os.path.join(app.root_path, 'static', 'SaveJson')
+    saved_presets = [f for f in os.listdir(save_json_dir) if f.endswith('.json')]
+    return saved_presets
+
+
+
+def import_data_from_json(json_file_path):
+    try:
+        # Удаляем существующие группы
+        print("Deleting existing node groups...")
+        delete_existing_groups()
+
+        # Читаем данные из JSON файла
+        print(f"Reading data from {json_file_path}...")
+        with open(json_file_path, 'r') as file:
+            data = json.load(file)
+
+        # Создаем новые группы, ноды и события из данных JSON
+        for group_data in data['node_groups']:
+            print(f"Creating node group '{group_data['name']}'...")
+            group = NodeGroup.query.filter_by(name=group_data['name']).first()
+            if not group:
+                group = NodeGroup(name=group_data['name'])
+                db.session.add(group)
+
+            for node_data in group_data['nodes']:
+                node = Node.query.filter_by(ip_address=node_data['ip_address']).first()
+                if not node:
+                    print(f"Adding new node '{node_data['name']}' to group '{group.name}'...")
+                    node = Node(
+                        name=node_data['name'],
+                        ip_address=node_data['ip_address'],
+                        location=node_data['location'],
+                        status=node_data.get('status', True)
+                    )
+                    db.session.add(node)
+                else:
+                    print(f"Updating node '{node_data['name']}' in group '{group.name}'...")
+                    node.name = node_data['name']
+                    node.location = node_data['location']
+                    node.status = node_data.get('status', True)
+                group.nodes.append(node)
+
+            for event_data in group_data['events']:
+                event = Event.query.filter_by(
+                    start_time=datetime.strptime(event_data['start_time'], '%Y-%m-%dT%H:%M:%S'),
+                    end_time=datetime.strptime(event_data['end_time'], '%Y-%m-%dT%H:%M:%S')
+                ).first()
+                if not event:
+                    print(f"Adding new event '{event_data['start_time']}' to group '{group.name}'...")
+                    event = Event(
+                        schedule_id=event_data.get('schedule_id'),
+                        media_id=event_data.get('media_id'),
+                        start_time=datetime.strptime(event_data['start_time'], '%Y-%m-%dT%H:%M:%S'),
+                        end_time=datetime.strptime(event_data['end_time'], '%Y-%m-%dT%H:%M:%S')
+                    )
+                    db.session.add(event)
+                else:
+                    print(f"Updating event '{event_data['start_time']}' in group '{group.name}'...")
+                    event.schedule_id = event_data.get('schedule_id')
+                    event.media_id = event_data.get('media_id')
+                group.events.append(event)
+
+        db.session.commit()
+        print("Data imported successfully.")
+        return 'Data imported successfully.'
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f'Error importing data: {str(e)}')
+        return f'Error importing data: {str(e)}'
+    except Exception as e:
+        print(f'Unexpected error: {str(e)}')
+        return f'Unexpected error: {str(e)}'
+
+
+
+
+
+def delete_existing_groups():
+    # Обнуляем group_id у всех нод, которые принадлежали любой группе
+    Node.query.update({Node.group_id: None})
+    
+    # Если есть связующая таблица NodeGroupEvent, удаляем все связи
+    NodeGroupEvent.query.delete()
+
+    # Удаляем все группы нодов
+    NodeGroup.query.delete()
+    db.session.commit()
+
+
+
+
+@app.route('/import_preset', methods=['GET', 'POST'])
+@login_required
+def import_preset_route():
+    if request.method == 'GET':
+        print("GET request received - this should not happen for import!")
+        return "GET requests are not supported on this URL.", 405
+
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+
+    preset_name = request.form.get('preset_name')
+    if preset_name.endswith('.json'):
+        preset_name = preset_name[:-5]  # Убираем расширение .json
+
+    json_file_path = os.path.join(app.root_path, 'static', 'SaveJson', f'{preset_name}.json')
+    print(f"Attempting to import from {json_file_path}")  # Логирование пути файла
+
+    import_data_from_json(json_file_path)
+
+    if NodeGroup.query.count() > 0:
+        flash('Data imported successfully.', 'success')
+    else:
+        flash('Failed to import data.', 'error')
+        
+    return redirect(url_for('node_interface'))
+
+
+@app.route('/delete_preset', methods=['POST'])
+@login_required
+def delete_preset_route():
+    if current_user.role != 'master':
+        return "Доступ запрещен", 403
+
+    preset_name = request.form.get('preset_name')
+    file_path = os.path.join(app.root_path, 'static', 'SaveJson', preset_name)
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            flash('Файл успешно удален.', 'success')
+        except Exception as e:
+            flash(f'Ошибка при удалении файла: {str(e)}', 'error')
+    else:
+        flash('Файл не найден.', 'error')
+
+    return redirect(url_for('node_interface'))
 
 
 
