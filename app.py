@@ -1,8 +1,11 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, make_response, jsonify
+from flask import Flask, render_template, redirect, url_for, flash, request, make_response, jsonify, current_app
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import SQLAlchemyError
 from moviepy.editor import VideoFileClip, AudioFileClip
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
+import requests
 import pymysql
 import secrets, json, os
 from datetime import datetime, timedelta
@@ -25,6 +28,7 @@ db = SQLAlchemy(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+
 
 
 class User(db.Model, UserMixin):
@@ -131,22 +135,86 @@ class NodeGroup(db.Model):
     events = db.relationship('Event', secondary='nodegroup_event', backref='node_groups', lazy='dynamic')
     nodes = db.relationship('Node', backref='group', lazy=True)
 
-
-@property
-def active_schedule_type(self):
-    now = datetime.datetime.now()
-    print(f"Checking active schedule type for NodeGroup {self.name} at {now}")
-    for event in self.events:
-        if event.start_time <= now <= event.end_time:
-            print(f"Active event found: {event.name} with schedule type {event.schedule.type}")
-            return event.schedule.type
-    print("No active events found for this NodeGroup at the current time.")
-    return None
+    @property
+    def active_schedule_type(self):
+        now = datetime.now()  # Обновлено: Удалено повторение 'datetime'
+        print(f"Checking active schedule type for NodeGroup {self.name} at {now}")
+        for event in self.events:
+            if event.start_time <= now <= event.end_time:
+                print(f"Active event found: Event ID {event.id} with schedule type {event.schedule.type}")
+                return event.schedule.type
+        print("No active events found for this NodeGroup at the current time.")
+        return None
 
 class NodeGroupEvent(db.Model):
     __tablename__ = 'nodegroup_event'
     node_group_id = db.Column(db.Integer, db.ForeignKey('node_group.id'), primary_key=True)
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), primary_key=True)
+
+
+
+# Функции и планировщик
+def check_and_play_media(app):
+    # Создаем контекст приложения
+    with app.app_context():
+        now = datetime.now()
+        print(f"Checking for active media to play at {now}")
+        node_groups = NodeGroup.query.all()
+
+        if not node_groups:
+            print("No node groups found.")
+            return
+
+        for group in node_groups:
+            print(f"Checking group {group.name}")
+            active_type = group.active_schedule_type  # Предполагается, что это метод @property класса NodeGroup
+            if not active_type:
+                print(f"No active schedule type for group {group.name} at {now}")
+                continue  # Пропускаем группу, если нет активного расписания
+
+            print(f"Active schedule type for group {group.name} is {active_type}")
+
+            for event in group.events:
+                if event.schedule.type == active_type and event.start_time <= now <= event.end_time:
+                    for node in group.nodes:
+                        media_url = url_for('static', filename='videos/' + event.media.filename, _external=True)
+                        print(f"Attempting to send media to {node.ip_address} for event {event.id} with URL: {media_url}")
+                        try:
+                            response = send_media_command(node.ip_address, media_url)
+                            if response and response.status_code == 200:
+                                print(f"Successfully sent media to {node.ip_address} for event {event.id}")
+                            else:
+                                print(f"Failed to send media to {node.ip_address} for event {event.id}: {response}")
+                        except Exception as e:
+                            print(f"Error sending media to {node.ip_address} for event {event.id}: {e}")
+                else:
+                    print(f"Event with ID {event.id} is not active or does not match the active schedule type.")
+
+
+
+
+scheduler = BackgroundScheduler()
+
+
+def start_scheduler(app):
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(lambda: check_and_play_media(app), 'interval', minutes=1)
+    scheduler.start()
+
+    # Зарегистрируйте функцию shutdown для корректного завершения планировщика при закрытии приложения
+    atexit.register(lambda: scheduler.shutdown())
+
+
+def send_media_command(ip_address, media_url):
+    try:
+        # Замените URL на актуальный путь к API устройства
+        response = requests.post(f"http://{ip_address}/api/play", json={"media_url": media_url})
+        response.raise_for_status()  # Это вызовет исключение, если запрос не успешен
+        return response
+    except requests.RequestException as e:
+        print(f"Failed to send command to {ip_address}: {e}")
+        return None
+
 
 
 
@@ -1095,8 +1163,6 @@ def import_data_from_json(json_file_path):
 
 
 
-
-
 def delete_existing_groups():
     # Обнуляем group_id у всех нод, которые принадлежали любой группе
     Node.query.update({Node.group_id: None})
@@ -1107,8 +1173,6 @@ def delete_existing_groups():
     # Удаляем все группы нодов
     NodeGroup.query.delete()
     db.session.commit()
-
-
 
 
 @app.route('/import_preset', methods=['GET', 'POST'])
@@ -1160,10 +1224,6 @@ def delete_preset_route():
 
 
 
-
-
-
-
 print("Перед if __name__ == '__main__':")
 
 
@@ -1178,6 +1238,7 @@ if __name__ == '__main__':
         
         # Запуск сервера Flask
         print("Запуск сервера Flask...")
+        start_scheduler(app) # Передаем экземпляр app в функцию start_scheduler
         app.run(debug=True, threaded=True, host='0.0.0.0')
         
     except Exception as e:
