@@ -18,7 +18,7 @@ app = Flask(__name__)
 
 app.secret_key = secrets.token_hex(16)
 
-
+app.config['SERVER_NAME'] = '192.168.0.29:5000'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:20120512LiBuN@localhost/Users'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'C:/Users/PC/Desktop/Python_Hope/static/videos'
@@ -217,7 +217,6 @@ def send_media_command(ip_address, media_url):
 
 
 
-
 @app.route('/')
 def hello_world():
     return render_template('index.html')   
@@ -385,6 +384,7 @@ def edit_schedule(schedule_id):
             flash('Расписание с таким названием уже существует.')
             return render_template('edit_schedule.html', schedule=schedule)
         
+        schedule.name = name  # Обновляем имя
         schedule.description = request.form.get('description')
         schedule.type = request.form.get('type')
         
@@ -488,6 +488,12 @@ def edit_event(event_id):
         return "Доступ запрещен", 403
 
     event = Event.query.get_or_404(event_id)
+    
+    # Проверяем, связано ли событие с какой-либо группой нодов
+    if any(group for group in NodeGroup.query.all() if event in group.events):
+        flash('Событие уже используется в одной из групп нодов и не может быть отредактировано.', 'error')
+        return redirect(url_for('super_admin_page'))
+
 
     if request.method == 'POST':
         schedule_id = request.form.get('schedule_id')
@@ -1106,48 +1112,56 @@ def import_data_from_json(json_file_path):
 
         # Создаем новые группы, ноды и события из данных JSON
         for group_data in data['node_groups']:
-            print(f"Creating node group '{group_data['name']}'...")
+            print(f"Creating or updating node group '{group_data['name']}'...")
             group = NodeGroup.query.filter_by(name=group_data['name']).first()
             if not group:
                 group = NodeGroup(name=group_data['name'])
                 db.session.add(group)
 
             for node_data in group_data['nodes']:
-                node = Node.query.filter_by(ip_address=node_data['ip_address']).first()
-                if not node:
-                    print(f"Adding new node '{node_data['name']}' to group '{group.name}'...")
-                    node = Node(
-                        name=node_data['name'],
-                        ip_address=node_data['ip_address'],
-                        location=node_data['location'],
-                        status=node_data.get('status', True)
-                    )
-                    db.session.add(node)
-                else:
-                    print(f"Updating node '{node_data['name']}' in group '{group.name}'...")
-                    node.name = node_data['name']
+                node = Node.query.filter_by(name=node_data['name']).first()
+                if node:
+                    # Обновляем существующий нод, если IP адрес изменился
+                    if node.ip_address != node_data['ip_address']:
+                        print(f"Updating IP address for node '{node_data['name']}' from {node.ip_address} to {node_data['ip_address']}")
+                        node.ip_address = node_data['ip_address']
                     node.location = node_data['location']
                     node.status = node_data.get('status', True)
+                else:
+                    # Создаем новый нод, если он еще не существует
+                    if not Node.query.filter_by(ip_address=node_data['ip_address']).first():
+                        print(f"Adding new node '{node_data['name']}' with IP {node_data['ip_address']}")
+                        node = Node(
+                            name=node_data['name'],
+                            ip_address=node_data['ip_address'],
+                            location=node_data['location'],
+                            status=node_data.get('status', True)
+                        )
+                        db.session.add(node)
+                    else:
+                        print(f"Node with IP {node_data['ip_address']} already exists and will not be added again.")
                 group.nodes.append(node)
 
             for event_data in group_data['events']:
                 event = Event.query.filter_by(
+                    schedule_id=event_data.get('schedule_id'),
+                    media_id=event_data.get('media_id'),
                     start_time=datetime.strptime(event_data['start_time'], '%Y-%m-%dT%H:%M:%S'),
                     end_time=datetime.strptime(event_data['end_time'], '%Y-%m-%dT%H:%M:%S')
                 ).first()
                 if not event:
                     print(f"Adding new event '{event_data['start_time']}' to group '{group.name}'...")
                     event = Event(
-                        schedule_id=event_data.get('schedule_id'),
-                        media_id=event_data.get('media_id'),
+                        schedule_id=event_data['schedule_id'],
+                        media_id=event_data['media_id'],
                         start_time=datetime.strptime(event_data['start_time'], '%Y-%m-%dT%H:%M:%S'),
                         end_time=datetime.strptime(event_data['end_time'], '%Y-%m-%dT%H:%M:%S')
                     )
                     db.session.add(event)
                 else:
                     print(f"Updating event '{event_data['start_time']}' in group '{group.name}'...")
-                    event.schedule_id = event_data.get('schedule_id')
-                    event.media_id = event_data.get('media_id')
+                    event.schedule_id = event_data['schedule_id']
+                    event.media_id = event_data['media_id']
                 group.events.append(event)
 
         db.session.commit()
@@ -1160,6 +1174,9 @@ def import_data_from_json(json_file_path):
     except Exception as e:
         print(f'Unexpected error: {str(e)}')
         return f'Unexpected error: {str(e)}'
+
+
+
 
 
 

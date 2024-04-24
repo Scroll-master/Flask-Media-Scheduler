@@ -74,7 +74,7 @@
             "name": "Digital",
             "nodes": [
                 {
-                    "id": 5,
+                    "id": 43,
                     "name": "Awer",
                     "ip_address": "192.168.20.5",
                     "location": "",
@@ -95,6 +95,13 @@
                     "media_id": 1,
                     "start_time": "2024-02-25T12:03:00",
                     "end_time": "2024-02-25T13:03:00"
+                },
+                {
+                    "id": 64,
+                    "schedule_id": 15,
+                    "media_id": 4,
+                    "start_time": "2024-02-22T00:44:00",
+                    "end_time": "2024-02-22T17:07:00"
                 }
             ]
         }
