@@ -137,14 +137,35 @@ class NodeGroup(db.Model):
 
     @property
     def active_schedule_type(self):
-        now = datetime.now()  # Обновлено: Удалено повторение 'datetime'
+        now = datetime.now()
         print(f"Checking active schedule type for NodeGroup {self.name} at {now}")
-        for event in self.events:
-            if event.start_time <= now <= event.end_time:
-                print(f"Active event found: Event ID {event.id} with schedule type {event.schedule.type}")
-                return event.schedule.type
-        print("No active events found for this NodeGroup at the current time.")
+
+        # Собираем все активные события в текущий момент времени
+        active_events = [event for event in self.events if event.start_time <= now <= event.end_time]
+
+        if not active_events:
+            print("No active events found for this NodeGroup at the current time.")
+            return None
+        
+        if len(active_events) == 1:
+            # Если есть только одно активное событие, возвращаем его тип расписания
+            only_event = active_events[0]
+            print(f"Active event found: Event ID {only_event.id} with schedule type {only_event.schedule.type}")
+            return only_event.schedule.type
+        
+
+        # Определяем событие с максимальным приоритетом
+        highest_priority_event = max(active_events, key=lambda event: get_priority(event.schedule.type))
+
+        # Проверяем, может ли это событие перекрыть другие активные события
+        for event in active_events:
+            if event.id != highest_priority_event.id and can_override(highest_priority_event.schedule.type, event.schedule.type):
+                print(f"Active event found: Event ID {highest_priority_event.id} with schedule type {highest_priority_event.schedule.type}")
+                return highest_priority_event.schedule.type
+
+        print(f"Event with ID {highest_priority_event.id} does not have a higher priority to override other active events.")
         return None
+
 
 class NodeGroupEvent(db.Model):
     __tablename__ = 'nodegroup_event'
@@ -153,9 +174,42 @@ class NodeGroupEvent(db.Model):
 
 
 
-# Функции и планировщик
+class PlaybackManager:
+    def __init__(self):
+        self.current_event = None
+        self.event_stack = []
+
+    def start_event(self, event_id, media_url):
+        if self.current_event:
+            self.event_stack.append(self.current_event)
+        self.current_event = {'event_id': event_id, 'media_url': media_url}
+
+    def end_current_event(self):
+        if self.event_stack:
+            self.current_event = self.event_stack.pop()
+        else:
+            self.current_event = None
+
+    def get_current_media_url(self):
+        if self.current_event:
+            return self.current_event['media_url']
+        return None
+
+    def is_media_ended(self):
+        if self.current_event and 'process' in self.current_event:
+            ended = self.current_event['process'].poll() is not None
+            print(f"Media process ended: {ended}")
+            return ended
+        print("No media process found")
+        return True  # Если процесса нет, считаем медиа завершенным
+
+
+
+
+# Глобальная переменная для управления воспроизведением
+playback_manager = PlaybackManager()
+
 def check_and_play_media(app):
-    # Создаем контекст приложения
     with app.app_context():
         now = datetime.now()
         print(f"Checking for active media to play at {now}")
@@ -167,28 +221,35 @@ def check_and_play_media(app):
 
         for group in node_groups:
             print(f"Checking group {group.name}")
-            active_type = group.active_schedule_type  # Предполагается, что это метод @property класса NodeGroup
+            active_type = group.active_schedule_type
             if not active_type:
                 print(f"No active schedule type for group {group.name} at {now}")
-                continue  # Пропускаем группу, если нет активного расписания
+                continue
 
-            print(f"Active schedule type for group {group.name} is {active_type}")
+            active_events = [event for event in group.events if event.schedule.type == active_type and event.start_time <= now <= event.end_time]
+            if active_events:
+                highest_priority_event = max(active_events, key=lambda event: get_priority(event.schedule.type))
+                current_media_url = playback_manager.get_current_media_url()
+                new_media_url = url_for('static', filename='videos/' + highest_priority_event.media.filename, _external=True)
 
-            for event in group.events:
-                if event.schedule.type == active_type and event.start_time <= now <= event.end_time:
+                if current_media_url != new_media_url or playback_manager.is_media_ended():
+                    playback_manager.start_event(highest_priority_event.id, new_media_url)
                     for node in group.nodes:
-                        media_url = url_for('static', filename='videos/' + event.media.filename, _external=True)
-                        print(f"Attempting to send media to {node.ip_address} for event {event.id} with URL: {media_url}")
-                        try:
-                            response = send_media_command(node.ip_address, media_url)
-                            if response and response.status_code == 200:
-                                print(f"Successfully sent media to {node.ip_address} for event {event.id}")
-                            else:
-                                print(f"Failed to send media to {node.ip_address} for event {event.id}: {response}")
-                        except Exception as e:
-                            print(f"Error sending media to {node.ip_address} for event {event.id}: {e}")
-                else:
-                    print(f"Event with ID {event.id} is not active or does not match the active schedule type.")
+                        print(f"Attempting to send media to {node.ip_address} for event {highest_priority_event.id} with URL: {new_media_url}")
+                        response = send_media_command(node.ip_address, new_media_url)
+                        if response and response.status_code == 200:
+                            print(f"Successfully sent media to {node.ip_address} for event {highest_priority_event.id}")
+                        else:
+                            print(f"Failed to send media to {node.ip_address} for event {highest_priority_event.id}")
+            else:
+                if playback_manager.current_event and playback_manager.is_media_ended():
+                    playback_manager.end_current_event()
+                    if playback_manager.get_current_media_url():
+                        for node in group.nodes:
+                            send_media_command(node.ip_address, playback_manager.get_current_media_url())
+
+
+
 
 
 
@@ -208,7 +269,7 @@ def start_scheduler(app):
 def send_media_command(ip_address, media_url):
     try:
         # Замените URL на актуальный путь к API устройства
-        response = requests.post(f"http://{ip_address}/api/play", json={"media_url": media_url})
+        response = requests.post(f"http://{ip_address}:5000/api/play", json={"media_url": media_url})
         response.raise_for_status()  # Это вызовет исключение, если запрос не успешен
         return response
     except requests.RequestException as e:
