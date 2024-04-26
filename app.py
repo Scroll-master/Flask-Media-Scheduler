@@ -13,6 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename  # Добавлен для безопасной загрузки файлов
 import threading
 import re
+import subprocess
 
 app = Flask(__name__)
 
@@ -250,16 +251,16 @@ def check_and_play_media(app):
 
 
 
-
-
-
-
 scheduler = BackgroundScheduler()
 
 
 def start_scheduler(app):
     scheduler = BackgroundScheduler()
     scheduler.add_job(lambda: check_and_play_media(app), 'interval', minutes=1)
+    
+    # Установите интервал проверки статуса нод в 30 секунд
+    scheduler.add_job(lambda: check_node_status(), 'interval', seconds=30)
+    
     scheduler.start()
 
     # Зарегистрируйте функцию shutdown для корректного завершения планировщика при закрытии приложения
@@ -284,6 +285,66 @@ def hello_world():
 #@app.route('/password')
 #def passwordgem():
 #        return password_hash
+        
+        
+@app.route('/update_status', methods=['POST'])
+@login_required  # Требование аутентификации
+def update_status():
+    data = request.json
+    node = Node.query.filter_by(ip_address=data['ip_address']).first()
+    if node:
+        node.status = data['status']
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Status updated'}), 200
+    return jsonify({'success': False, 'message': 'Node not found'}), 404        
+         
+        
+@app.route('/api/nodes', methods=['GET'])
+@login_required  # Требование аутентификации
+def get_nodes_status():
+    nodes = Node.query.all()  # Получаем все ноды из базы данных
+    node_data = [{
+        'ip_address': node.ip_address,
+        'status': node.status,
+        'group_name': node.group.name if node.group else 'No group',  # Указываем группу, если она есть
+        'location': node.location
+    } for node in nodes]
+    return jsonify(node_data)  # Возвращаем данные в формате JSON        
+            
+            
+@app.route('/node_statuses', methods=['GET'])
+@login_required  # Требование аутентификации
+def node_statuses():
+    nodes = Node.query.filter(Node.group_id.isnot(None)).all()  # Только ноды с группами
+    statuses = [{
+        'ip_address': node.ip_address,
+        'status': node.status,
+        'group': node.group.name,
+        'location': node.location  # добавлено, если нужно отобразить расположение ноды
+    } for node in nodes]
+    return jsonify(statuses)            
+            
+            
+def check_node_status():
+    with app.app_context():
+        nodes = Node.query.filter(Node.group_id.isnot(None)).all()  # Только ноды с группами
+        for node in nodes:
+            try:
+                # Логируем попытку запроса
+                print(f"Checking status for {node.ip_address}")
+                # Предполагаем, что у ноды есть эндпоинт /status для проверки её состояния
+                response = requests.get(f'http://{node.ip_address}:5000/api/status', timeout=3)
+                # Логируем успешный ответ
+                print(f"Status for {node.ip_address}: {response.status_code}")
+                # Устанавливаем статус в True, если нода отвечает корректно
+                node.status = response.status_code == 200
+            except requests.exceptions.RequestException as e:
+                print(f"Failed to check status for {node.ip_address}: {e}")
+                node.status = False  # Считаем ноду неактивной, если произошла ошибка
+            db.session.commit()  # Сохраняем изменения статуса в базу данных            
+           
+            
+           
         
 @app.route('/private', methods=['GET', 'POST'])
 @login_required  # Требование аутентификации

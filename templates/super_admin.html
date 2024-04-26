@@ -11,6 +11,13 @@
 
     <h1>Специальная страница</h1>
 
+    <h2>Статус нодов</h2>
+    <div id="node-status-container">Loading statuses...</div>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+
+
+
     <h2>Расписания</h2>
 <table>
     <thead>
@@ -130,9 +137,31 @@
     <button type="submit">Управление нодами</button>
 </form>
 
+<form method="GET" action="/logout">
+    <button type="submit">Выйти из системы</button>
+</form>
 
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const nodeStatusContainer = document.getElementById('node-status-container');
 
-    <form method="GET" action="/logout">
-        <button type="submit">Выйти из системы</button>
-    </form>
+        function updateNodeStatuses() {
+            fetch('/node_statuses')
+                .then(response => response.json())
+                .then(data => {
+                    nodeStatusContainer.innerHTML = '';  // Очищаем контейнер перед добавлением нового содержимого
+                    data.forEach(node => {
+                        const nodeElement = document.createElement('div');
+                        nodeElement.textContent = `Group: ${node.group} - IP: ${node.ip_address} - Status: ${node.status ? 'Active' : 'Inactive'} - Location: ${node.location}`;
+                        nodeStatusContainer.appendChild(nodeElement);
+                    });
+                })
+                .catch(error => console.error('Error fetching node statuses:', error));
+        }
+
+        setInterval(updateNodeStatuses, 5000);  // Обновление статусов каждые 5 секунд
+    });
+</script>
+    
+
 {% endblock %}
