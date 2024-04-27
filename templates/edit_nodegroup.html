@@ -1,24 +1,23 @@
 {% extends 'base.html' %}
 
 {% block content %}
-{% for message in get_flashed_messages() %}
-    <div class="alert alert-warning" role="alert">
-        {{ message }}
-    </div>
-{% endfor %}
-<div class="container">
-    <h2>{{ "Редактировать" if nodegroup is defined and nodegroup.id else "Создать новую" }} группу нодов</h2>
-    <!-- Форма для редактирования или создания групп нод -->
+<div class="container mt-4">
+    {% for message in get_flashed_messages() %}
+        <div class="alert alert-warning" role="alert">
+            {{ message }}
+        </div>
+    {% endfor %}
+
+    <h2 class="mb-4">{{ "Редактировать" if nodegroup is defined and nodegroup.id else "Создать новую" }} группу нодов</h2>
+
     <form method="post" action="{{ url_for('edit_nodegroup', nodegroup_id=nodegroup.id) if nodegroup and nodegroup.id else url_for('new_nodegroup') }}">
-        <!-- Поле для названия группы нод -->
         <div class="form-group">
-            <label for="name">Group Name:</label>
+            <label for="name">Название группы:</label>
             <input type="text" class="form-control" id="name" name="name" value="{{ nodegroup.name if nodegroup else '' }}" required>
         </div>
 
-        <!-- Список доступных нод для добавления в группу -->
-        <h3>Available Nodes</h3>
-        <div class="form-group">
+        <h3>Доступные ноды</h3>
+        <div class="form-group scrollable-checkbox-list">
             {% for node in nodes %}
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="node_ids" value="{{ node.id }}" id="node_{{ node.id }}" {{ 'checked' if node in nodegroup.nodes }}>
@@ -29,9 +28,8 @@
             {% endfor %}
         </div>
 
-        <!-- Список доступных событий для добавления в группу -->
-        <h3>Available Events</h3>
-        <div class="form-group">
+        <h3>Доступные события</h3>
+        <div class="form-group scrollable-checkbox-list">
             {% for event in events %}
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="event_ids" value="{{ event.id }}" id="event_{{ event.id }}" {{ 'checked' if event in nodegroup.events }}>
@@ -42,12 +40,14 @@
             {% endfor %}
         </div>
 
-        <!-- Кнопка для сохранения изменений -->
-        <button type="submit" class="btn btn-success">Save Changes</button>
+        <button type="submit" class="btn btn-success mb-3">Сохранить изменения</button>
     </form>
-    <form action="{{ url_for('node_interface') }}" method="get">
+
+    <form action="{{ url_for('node_interface') }}" method="get" class="mt-2">
         <button type="submit" class="btn btn-secondary">Назад</button>
     </form>
 </div>
+
 {% endblock %}
+
 

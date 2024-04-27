@@ -3,21 +3,31 @@
 {% block title %}Edit Node Groups{% endblock %}
 
 {% block content %}
+<!-- Сообщения для пользователя -->
 {% for message in get_flashed_messages(category_filter=["error"]) %}
 <div class="alert alert-warning" role="alert">
     {{ message }}
 </div>
 {% endfor %}
 
-    <h1>Edit Node Groups</h1>
+<div class="container mt-4">
+    <h1 class="mb-4">Редактирование групп узлов</h1>
 
-    <form action="/export_preset" method="POST">
-        <label for="preset_name">Название пресета:</label>
-        <input type="text" id="preset_name" name="preset_name" required>
-        <button type="submit">Создать пресет</button>
+    <!-- Форма для создания нового пресета -->
+    <form action="/export_preset" method="POST" class="mb-3">
+        <div class="form-group">
+            <label for="preset_name">Название пресета:</label>
+            <!-- Используем класс form-control от Bootstrap для стилизации поля ввода -->
+            <input type="text" class="form-control" id="preset_name" name="preset_name" required>
+        </div>
+        <!-- Кнопка создания пресета с классами от Bootstrap -->
+        <button type="submit" class="btn btn-primary">Создать пресет</button>
     </form>
 
-    <form action="{{ url_for('node_interface') }}" method="get">
+    <!-- Кнопка возврата с классами от Bootstrap -->
+    <form action="{{ url_for('node_interface') }}" method="get" class="mb-3">
         <button type="submit" class="btn btn-secondary">Назад</button>
     </form>
+</div>
 {% endblock %}
+

@@ -1,27 +1,30 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container">
+<div class="container mt-4">
     {% for message in get_flashed_messages(category_filter=["error"]) %}
     <div class="alert alert-warning" role="alert">
         {{ message }}
     </div>
     {% endfor %}
     
-    <h2>Группы Нодов</h2>
-    {% for group in node_groups %}
-    <div class="node-group">
-        <h3>{{ group.name }}</h3>
-        <div>События:</div>
-        <ul>
+    <h2 class="mb-3">Группы Нодов</h2>
+{% for group in node_groups %}
+<div class="mb-4">
+    <h3>{{ group.name }}</h3>
+    <div>События:</div>
+    <div class="scrollable-list mb-2">
+        <ul class="list-group">
             {% for event in group.events %}
-            <li>{{ event.schedule.name }} ({{ event.start_time }} - {{ event.end_time }})</li>
+            <li class="list-group-item">{{ event.schedule.name }} ({{ event.start_time }} - {{ event.end_time }})</li>
             {% else %}
-            <li>Нет событий</li>
+            <li class="list-group-item">Нет событий</li>
             {% endfor %}
         </ul>
-        <div>Ноды в этой группе:</div>
-        <table>
+    </div>
+    <div>Ноды в этой группе:</div>
+    <div class="scrollable-table mb-2">
+        <table class="table table-striped">
             <thead>
                 <tr>
                     <th>Название</th>
@@ -39,67 +42,70 @@
                     <td>{{ node.location }}</td>
                     <td>{{ 'Включен' if node.status else 'Выключен' }}</td>
                     <td>
-                        <form action="{{ url_for('edit_node', node_id=node.id) }}" method="get">
-                            <button type="submit" class="btn btn-secondary">Редактировать</button>
+                        <form action="{{ url_for('edit_node', node_id=node.id) }}" method="get" class="d-inline">
+                            <button type="submit" class="btn btn-secondary btn-sm">Редактировать</button>
                         </form>
-                        <form action="{{ url_for('delete_node', node_id=node.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот нод?');">
-                            <button type="submit" class="btn btn-danger">Удалить</button>
+                        <form action="{{ url_for('delete_node', node_id=node.id) }}" method="post" class="d-inline" onsubmit="return confirm('Вы уверены, что хотите удалить этот нод?');">
+                            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
                         </form>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        <form action="{{ url_for('edit_nodegroup', nodegroup_id=group.id) }}" method="get">
-            <button type="submit" class="btn btn-secondary">Редактировать группу</button>
-        </form>
-        <form action="{{ url_for('delete_nodegroup', nodegroup_id=group.id) }}" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить эту группу нодов?');">
-            <button type="submit" class="btn btn-danger">Удалить группу</button>
-        </form>
     </div>
-    {% endfor %}
-
-    <form action="{{ url_for('new_node') }}" method="get">
-        <button type="submit" class="btn btn-primary">Добавить новый нод</button>
+    <form action="{{ url_for('edit_nodegroup', nodegroup_id=group.id) }}" method="get" class="d-inline">
+        <button type="submit" class="btn btn-secondary btn-sm">Редактировать группу</button>
     </form>
-
-    <form action="{{ url_for('new_nodegroup') }}" method="get">
-        <button type="submit" class="btn btn-primary">Добавить новую группу нодов</button>
+    <form action="{{ url_for('delete_nodegroup', nodegroup_id=group.id) }}" method="post" class="d-inline" onsubmit="return confirm('Вы уверены, что хотите удалить эту группу нодов?');">
+        <button type="submit" class="btn btn-danger btn-sm">Удалить группу</button>
     </form>
+</div>
+{% endfor %}
 
-    <form action="{{ url_for('export_preset_route') }}" method="get">
-        <button type="submit">Экспортировать данные</button>
-    </form>
+<form action="{{ url_for('new_node') }}" method="get" class="mb-2">
+    <button type="submit" class="btn btn-primary">Добавить новый нод</button>
+</form>
 
-        <h2>Import Node Group Data</h2>
-    <table>
+<form action="{{ url_for('new_nodegroup') }}" method="get" class="mb-2">
+    <button type="submit" class="btn btn-primary">Добавить новую группу нодов</button>
+</form>
+
+<form action="{{ url_for('export_preset_route') }}" method="get" class="mb-2">
+    <button type="submit" class="btn btn-info">Экспортировать данные</button>
+</form>
+
+
+<h2 class="mb-3">Import Node Group Data</h2>
+<div class="scrollable-table">
+    <table class="table table-striped">
         <tbody>
             {% for preset_file in saved_presets %}
             <tr>
                 <td>{{ preset_file }}</td>
                 <td>
-                    <form action="{{ url_for('import_preset_route') }}" method="POST" style="display: inline;">
-                        <input type="hidden" name="preset_name" value="{{ preset_file }}">
-                        <button type="submit" class="btn btn-primary">Import</button>
-                    </form>
-                    <form action="{{ url_for('delete_preset_route') }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this preset?');">
-                        <input type="hidden" name="preset_name" value="{{ preset_file }}">
-                        <button type="submit" class="btn btn-danger">Delete</button>
-                    </form>
+                    <div class="d-inline-block">
+                        <form action="{{ url_for('import_preset_route') }}" method="POST" class="d-inline">
+                            <input type="hidden" name="preset_name" value="{{ preset_file }}">
+                            <button type="submit" class="btn btn-primary btn-sm">Import</button>
+                        </form>
+                        <form action="{{ url_for('delete_preset_route') }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this preset?');">
+                            <input type="hidden" name="preset_name" value="{{ preset_file }}">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
-
-    
+</div>
 
 
 
     <form action="{{ url_for('super_admin_page') }}" method="get">
         <button type="submit" class="btn btn-secondary">Назад</button>
     </form>
-    
     
 
 </div>
