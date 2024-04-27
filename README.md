@@ -40,7 +40,9 @@ You will need the following tools installed on your system:
    - **SQLAlchemy Database URI**: Change `app.config['SQLALCHEMY_DATABASE_URI']` to your MySQL connection string (e.g., `'mysql+pymysql://username:password@host/database'`).
    - **SQLAlchemy Track Modifications**: If needed, set `app.config['SQLALCHEMY_TRACK_MODIFICATIONS']` to `False`.
    - **Upload Folder**: Update `app.config['UPLOAD_FOLDER']` to the desired folder path for storing uploaded media files.
-5. Run the application using `flask run` or a similar command depending on your setup.
+5. Customize default user accounts:
+   - The application initializes with two user accounts: `Super_Admin` and `Admin`. If necessary, modify the usernames and passwords directly in the source code where the `create_users` function is called, prior to starting the server.
+6. Run the application using `flask run` or a similar command depending on your setup.
 
 4. Configure your MySQL database settings.
 5. Run the application.
