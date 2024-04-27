@@ -47,7 +47,35 @@ class User(db.Model, UserMixin):
 
     def get_id(self):
         return self.id
+    
+    
+def create_users():
+    # Проверка наличия пользователей в базе данных
+    if not User.query.filter_by(username='Super_Admin').first():
+        super_admin = User(
+            username='Super_Admin',
+            role='master',
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        super_admin.set_password('08140215SuPA')  # Установка пароля через метод модели
+        db.session.add(super_admin)
 
+    if not User.query.filter_by(username='Admin').first():
+        admin = User(
+            username='Admin',
+            role='admin',
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        admin.set_password('08152114MiNA')  # Установка пароля через метод модели
+        db.session.add(admin)
+    
+    # Сохранение изменений в базе данных
+    db.session.commit()
+
+# Этот код добавляет дополнительный уровень безопасности, используя методы модели для управления паролями.
+    
 
 class Media(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1371,7 +1399,11 @@ if __name__ == '__main__':
         with app.app_context():
             print("Создаем таблицы...")
             db.create_all()
+            
+            print("Добавляем начальные данные в базу...")
+            create_users()  # Вызов функции для создания пользователей
             add_media_from_folder('C:/Users/PC/Desktop/Python_Hope/static/videos')
+            
         print("Успешное подключение к базе данных и создание таблиц!")
         
         # Запуск сервера Flask
