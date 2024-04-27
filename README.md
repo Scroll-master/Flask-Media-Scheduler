@@ -48,3 +48,42 @@ You will need the following tools installed on your system:
 5. Run the application.
 
 Detailed steps for each part will be provided in the subsequent sections.
+
+## Usage
+
+This section provides a step-by-step guide on how to use the application to manage media playback schedules across a network of devices.
+
+### Creating a Schedule
+1. **Access the Schedule Creation Interface**: Start by creating a new schedule.
+2. **Set Schedule Details**: Provide a name, description, and select a type for the schedule:
+   - **Exception**: Highest priority, used for one-time or overriding events.
+   - **Special Date**: Used for events that occur on specific dates.
+   - **Everyday**: Lowest priority, used for daily recurring events.
+3. **Setting Time**: For 'Special Date' schedules, you can also specify the exact time in addition to the date for precise scheduling.
+
+### Managing Media Files
+1. **Upload Media**: Navigate to the media management section to upload new media files.
+2. **Play Media**: Select any media file from the list and use the play option to test or preview the media.
+
+### Creating an Event
+1. **Access the Event Creation Interface**: Combine media files and schedules to create events.
+2. **Configure Event Details**: Specify which media file to play and the schedule to follow. Set the start and end times for the event.
+
+### Managing Nodes
+1. **Create a Node**: Define a node by its name, location (if necessary), and IP address.
+2. **Node Groups**: Create groups for managing multiple nodes. Assign nodes to a group to manage them collectively.
+
+### Node Groups and Events
+1. **Assigning Events to Node Groups**: Add events to a node group to ensure that all nodes within the group will play the assigned events.
+2. **Unique and Shared Events**: While an event can belong to multiple node groups, a node can only be part of one group at a time.
+
+### Automated Command Dispatch
+- The system is designed to automatically dispatch playback commands to nodes.
+- **Scheduling Checks**: By default, the application checks the schedule every minute. This interval can be adjusted in the `start_scheduler` function in the code by modifying the line:
+  ```python
+  scheduler.add_job(lambda: check_and_play_media(app), 'interval', minutes=1)
+
+
+
+
+
