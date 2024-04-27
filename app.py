@@ -31,7 +31,6 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 
-
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, index=True)
