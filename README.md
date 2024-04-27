@@ -35,6 +35,13 @@ You will need the following tools installed on your system:
 1. Clone the repository to your local machine.
 2. Navigate to the project directory.
 3. Install the required packages using `pip install -r requirements.txt`.
+4. Configure your MySQL database settings and other application settings:
+   - **Server Name**: Modify `app.config['SERVER_NAME']` to match your server's IP address and port.
+   - **SQLAlchemy Database URI**: Change `app.config['SQLALCHEMY_DATABASE_URI']` to your MySQL connection string (e.g., `'mysql+pymysql://username:password@host/database'`).
+   - **SQLAlchemy Track Modifications**: If needed, set `app.config['SQLALCHEMY_TRACK_MODIFICATIONS']` to `False`.
+   - **Upload Folder**: Update `app.config['UPLOAD_FOLDER']` to the desired folder path for storing uploaded media files.
+5. Run the application using `flask run` or a similar command depending on your setup.
+
 4. Configure your MySQL database settings.
 5. Run the application.
 
